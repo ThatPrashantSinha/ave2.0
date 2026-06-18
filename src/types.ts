@@ -30,3 +30,10 @@ export interface Habit {
   streak: number;
   history: Record<string, boolean>; // date (YYYY-MM-DD) -> completed
 }
+
+export interface Birthday {
+  id: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+}
+

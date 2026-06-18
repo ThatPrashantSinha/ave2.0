@@ -19,7 +19,11 @@ export function getOccurrencesForDateRange(tasks: Task[], rangeStart: Date, rang
 
     // If the task has no recurrence rule or recurring is 'none'
     if (!task.recurring || task.recurring === 'none') {
-      if (taskStartNormalized >= startNormalized && taskStartNormalized <= endNormalized) {
+      const taskEnd = task.endTime ? new Date(task.endTime) : taskStart;
+      const taskEndNormalized = new Date(taskEnd.getFullYear(), taskEnd.getMonth(), taskEnd.getDate());
+
+      // Check if the task intersects with the requested start-end date range
+      if (taskStartNormalized <= endNormalized && taskEndNormalized >= startNormalized) {
         occurrences.push(task);
       }
       continue;

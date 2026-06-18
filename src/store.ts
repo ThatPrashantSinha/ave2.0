@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Task, Habit } from './types';
+import { Task, Habit, TaskStatus, Birthday } from './types';
 import { addDays, subDays, format } from 'date-fns';
 import { toIST } from './lib/utils';
 import { 
@@ -15,7 +15,38 @@ import {
 export function useStore() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [birthdays, setBirthdays] = useState<Birthday[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Load birthdays on startup
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('daily_docket_birthdays');
+      if (stored) {
+        setBirthdays(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error('Failed to parse birthdays from localStorage:', e);
+    }
+  }, []);
+
+  const addBirthday = (name: string, date: string) => {
+    const id = Math.random().toString(36).substring(7);
+    const newBday: Birthday = { id, name, date };
+    setBirthdays(prev => {
+      const updated = [...prev, newBday];
+      localStorage.setItem('daily_docket_birthdays', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const deleteBirthday = (id: string) => {
+    setBirthdays(prev => {
+      const updated = prev.filter(b => b.id !== id);
+      localStorage.setItem('daily_docket_birthdays', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -87,45 +118,83 @@ export function useStore() {
     }, 0);
   };
 
-  const deleteTask = async (id: string) => {
+  const deleteTask = async (id: string, deleteMode: 'this' | 'following' | 'all' = 'this') => {
     const parts = id.split('::');
     const baseId = parts[0];
     const occurrenceDateStr = parts[1];
+    let tasksToPut: Task[] = [];
+    let tasksToDelete: string[] = [];
 
-    if (occurrenceDateStr) {
-      let updatedTask: Task | null = null;
-      setTasks(prev => prev.map(t => {
-        if (t.id === baseId) {
-          const deletedDates = t.deletedDates || [];
-          updatedTask = {
-            ...t,
-            deletedDates: [...deletedDates, occurrenceDateStr]
-          };
-          return updatedTask;
-        }
-        return t;
-      }));
-
-      setTimeout(async () => {
-        if (updatedTask) {
-          try {
-            await putTaskInDB(updatedTask);
-          } catch (e) {
-            console.error('Failed to update task in IndexedDB:', e);
-          }
-        }
-      }, 0);
-    } else {
-      setTasks(prev => prev.filter(t => t.id !== baseId));
-      try {
-        await deleteTaskFromDB(baseId);
-      } catch (e) {
-        console.error('Failed to delete task from IndexedDB:', e);
+    setTasks(prev => {
+      // If not an occurrence, we just delete the entire task
+      if (!occurrenceDateStr || deleteMode === 'all') {
+        tasksToDelete.push(baseId);
+        return prev.filter(t => t.id !== baseId);
       }
-    }
+
+      const parentTask = prev.find(t => t.id === baseId);
+      if (!parentTask) return prev;
+
+      if (deleteMode === 'following') {
+        const parentStartDateStr = parentTask.deadline 
+          ? new Date(parentTask.deadline).toISOString().split('T')[0]
+          : '';
+
+        if (occurrenceDateStr === parentStartDateStr) {
+          tasksToDelete.push(baseId);
+          return prev.filter(t => t.id !== baseId);
+        }
+
+        // Shorten the recurrence until the day before
+        const d = new Date(occurrenceDateStr + 'T12:00:00');
+        d.setDate(d.getDate() - 1);
+        const dayBeforeStr = d.toISOString().split('T')[0];
+
+        const updatedParent: Task = {
+          ...parentTask,
+          recurrenceRule: {
+            ...parentTask.recurrenceRule!,
+            frequency: parentTask.recurrenceRule?.frequency || (parentTask.recurring === 'daily' ? 'daily' : parentTask.recurring === 'weekly' ? 'weekly' : 'monthly'),
+            until: dayBeforeStr
+          }
+        };
+
+        tasksToPut = [updatedParent];
+        return prev.map(t => (t.id === baseId ? updatedParent : t));
+      } else {
+        // default: deleteMode === 'this' (Only this instance)
+        const updatedParent: Task = {
+          ...parentTask,
+          deletedDates: [...(parentTask.deletedDates || []), occurrenceDateStr]
+        };
+        tasksToPut = [updatedParent];
+        return prev.map(t => (t.id === baseId ? updatedParent : t));
+      }
+    });
+
+    // Write deletions / updates to DB
+    setTimeout(async () => {
+      for (const t of tasksToPut) {
+        try {
+          await putTaskInDB(t);
+        } catch (e) {
+          console.error('Failed to update task during deletion in IndexedDB:', e);
+        }
+      }
+      for (const tId of tasksToDelete) {
+        try {
+          await deleteTaskFromDB(tId);
+        } catch (e) {
+          console.error('Failed to delete task from IndexedDB:', e);
+        }
+      }
+    }, 0);
   };
 
-  const updateTask = async (id: string, updatedFields: Partial<Omit<Task, 'id'>> & { updateAllOccurrences?: boolean }) => {
+  const updateTask = async (
+    id: string,
+    updatedFields: Partial<Omit<Task, 'id'>> & { updateMode?: 'this' | 'following' | 'all' }
+  ) => {
     const parts = id.split('::');
     const baseId = parts[0];
     const occurrenceDateStr = parts[1];
@@ -135,9 +204,111 @@ export function useStore() {
       const parentTask = prev.find(t => t.id === baseId);
       if (!parentTask) return prev;
 
-      if (occurrenceDateStr && !updatedFields.updateAllOccurrences) {
+      const { updateMode, ...fieldsToMerge } = updatedFields;
+
+      // If this is a simple, non-recurring edit or updateMode is 'all'
+      if (!occurrenceDateStr || updateMode === 'all') {
+        const updatedParent: Task = { ...parentTask, ...fieldsToMerge };
+        tasksToPut = [updatedParent];
+        return prev.map(t => (t.id === baseId ? updatedParent : t));
+      }
+
+      const parentStartDateStr = parentTask.deadline 
+        ? new Date(parentTask.deadline).toISOString().split('T')[0]
+        : '';
+
+      const isFirstOccurrence = occurrenceDateStr === parentStartDateStr;
+
+      if (updateMode === 'following') {
+        if (isFirstOccurrence) {
+          // If editing starting from the first occurrence, it is identical to updating 'all'
+          const updatedParent: Task = { ...parentTask, ...fieldsToMerge };
+          tasksToPut = [updatedParent];
+          return prev.map(t => (t.id === baseId ? updatedParent : t));
+        }
+
+        // Calculate day before the current occurrence
+        const d = new Date(occurrenceDateStr + 'T12:00:00'); // avoid timezone overlap
+        d.setDate(d.getDate() - 1);
+        const dayBeforeStr = d.toISOString().split('T')[0];
+
         const idNew = Math.random().toString(36).substring(7);
-        const { updateAllOccurrences, ...fieldsToMerge } = updatedFields;
+
+        // Keep recurrence details in the cloned new event starting from this occurrence point
+        const clonedTask: Task = {
+          ...parentTask,
+          ...fieldsToMerge,
+          id: idNew,
+          occurrenceStatuses: {},
+          deletedDates: [],
+        };
+
+        // Adjust clonedTask start date (deadline) and duration
+        if (parentTask.deadline) {
+          const originalStart = new Date(parentTask.deadline);
+          const occurrenceStart = new Date(occurrenceDateStr + 'T12:00:00');
+          // Preserve hours, minutes, seconds from the parent task or the updated deadline
+          const finalStart = fieldsToMerge.deadline ? new Date(fieldsToMerge.deadline) : new Date(
+            occurrenceStart.getFullYear(),
+            occurrenceStart.getMonth(),
+            occurrenceStart.getDate(),
+            originalStart.getHours(),
+            originalStart.getMinutes(),
+            originalStart.getSeconds()
+          );
+          clonedTask.deadline = finalStart;
+
+          if (parentTask.endTime) {
+            const durationMs = new Date(parentTask.endTime).getTime() - originalStart.getTime();
+            clonedTask.endTime = fieldsToMerge.endTime ? new Date(fieldsToMerge.endTime) : new Date(finalStart.getTime() + durationMs);
+          }
+        }
+
+        // Parent task should now stop before this occurrence point
+        const updatedParent: Task = {
+          ...parentTask,
+          recurrenceRule: {
+            ...parentTask.recurrenceRule!,
+            frequency: parentTask.recurrenceRule?.frequency || (parentTask.recurring === 'daily' ? 'daily' : parentTask.recurring === 'weekly' ? 'weekly' : 'monthly'),
+            interval: parentTask.recurrenceRule?.interval || 1,
+            until: dayBeforeStr
+          }
+        };
+
+        // Migrate future statuses and exclusions to the clonedTask
+        const parentStatuses = { ...(parentTask.occurrenceStatuses || {}) };
+        const parentDeleted = [...(parentTask.deletedDates || [])];
+        
+        const clonedStatuses: Record<string, TaskStatus> = {};
+        const clonedDeleted: string[] = [];
+
+        Object.keys(parentStatuses).forEach(k => {
+          if (k >= occurrenceDateStr) {
+            clonedStatuses[k] = parentStatuses[k];
+            delete parentStatuses[k];
+          }
+        });
+
+        const updatedParentDeleted = parentDeleted.filter(dStr => {
+          if (dStr >= occurrenceDateStr) {
+            clonedDeleted.push(dStr);
+            return false;
+          }
+          return true;
+        });
+
+        updatedParent.occurrenceStatuses = parentStatuses;
+        updatedParent.deletedDates = updatedParentDeleted;
+
+        clonedTask.occurrenceStatuses = clonedStatuses;
+        clonedTask.deletedDates = clonedDeleted;
+
+        tasksToPut = [clonedTask, updatedParent];
+
+        return prev.map(t => (t.id === baseId ? updatedParent : t)).concat(clonedTask);
+      } else {
+        // default: updateMode === 'this' (Only this instance)
+        const idNew = Math.random().toString(36).substring(7);
         const clonedTask: Task = {
           ...parentTask,
           ...fieldsToMerge,
@@ -148,6 +319,26 @@ export function useStore() {
           deletedDates: undefined,
         };
 
+        // Adjust clonedTask start date (deadline) and duration
+        if (parentTask.deadline) {
+          const originalStart = new Date(parentTask.deadline);
+          const occurrenceStart = new Date(occurrenceDateStr + 'T12:00:00');
+          const finalStart = fieldsToMerge.deadline ? new Date(fieldsToMerge.deadline) : new Date(
+            occurrenceStart.getFullYear(),
+            occurrenceStart.getMonth(),
+            occurrenceStart.getDate(),
+            originalStart.getHours(),
+            originalStart.getMinutes(),
+            originalStart.getSeconds()
+          );
+          clonedTask.deadline = finalStart;
+
+          if (parentTask.endTime) {
+            const durationMs = new Date(parentTask.endTime).getTime() - originalStart.getTime();
+            clonedTask.endTime = fieldsToMerge.endTime ? new Date(fieldsToMerge.endTime) : new Date(finalStart.getTime() + durationMs);
+          }
+        }
+
         const updatedParent: Task = {
           ...parentTask,
           deletedDates: [...(parentTask.deletedDates || []), occurrenceDateStr]
@@ -155,21 +346,11 @@ export function useStore() {
 
         tasksToPut = [clonedTask, updatedParent];
 
-        return prev.map(t => {
-          if (t.id === baseId) return updatedParent;
-          return t;
-        }).concat(clonedTask);
-      } else {
-        const { updateAllOccurrences, ...fieldsToMerge } = updatedFields;
-        const updatedParent: Task = { ...parentTask, ...fieldsToMerge };
-        tasksToPut = [updatedParent];
-        return prev.map(t => {
-          if (t.id === baseId) return updatedParent;
-          return t;
-        });
+        return prev.map(t => (t.id === baseId ? updatedParent : t)).concat(clonedTask);
       }
     });
 
+    // Write tasks to IndexedDB
     setTimeout(async () => {
       for (const t of tasksToPut) {
         try {
@@ -251,6 +432,7 @@ export function useStore() {
   return {
     tasks,
     habits,
+    birthdays,
     isLoading,
     addTask,
     toggleTaskStatus,
@@ -259,6 +441,8 @@ export function useStore() {
     addHabit,
     deleteHabit,
     toggleHabitHistory,
+    addBirthday,
+    deleteBirthday,
     refreshStore: loadData
   };
 }

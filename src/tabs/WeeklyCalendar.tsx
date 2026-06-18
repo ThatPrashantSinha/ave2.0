@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, getHours, getMinutes, addHours } from 'date-fns';
-import { Task } from '../types';
+import { Task, Birthday } from '../types';
 import { cn, toIST } from '../lib/utils';
-import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit } from 'lucide-react';
+import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit, Gift, Trash2 } from 'lucide-react';
 import { AnalogClockPicker } from '../components/AnalogClockPicker';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
 
@@ -10,8 +10,10 @@ interface WeeklyCalendarProps {
   tasks: Task[];
   addTask: (task: Omit<Task, 'id'>) => void;
   toggleTask: (id: string) => void;
-  deleteTask: (id: string) => void;
-  updateTask?: (id: string, updatedFields: Partial<Omit<Task, 'id'>> & { updateAllOccurrences?: boolean }) => void;
+  deleteTask: (id: string, deleteMode?: 'this' | 'following' | 'all') => void;
+  updateTask?: (id: string, updatedFields: Partial<Omit<Task, 'id'>> & { updateMode?: 'this' | 'following' | 'all' }) => void;
+  birthdays: Birthday[];
+  onOpenBirthdays: () => void;
 }
 
 interface EventLayout {
@@ -128,10 +130,17 @@ function getEventLayouts(dayTasks: Task[], hourTops: number[], hourHeights: numb
   return layouts;
 }
 
-export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateTask }: WeeklyCalendarProps) {
+export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateTask, birthdays, onOpenBirthdays }: WeeklyCalendarProps) {
   const [currentDate, setCurrentDate] = useState(toIST(new Date()));
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [deleteMode, setDeleteMode] = useState<'this' | 'following' | 'all'>('this');
+  const [isDeleteSelectorOpen, setIsDeleteSelectorOpen] = useState(false);
+
+  useEffect(() => {
+    setDeleteMode('this');
+    setIsDeleteSelectorOpen(false);
+  }, [selectedTask]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [prefilledValues, setPrefilledValues] = useState<{
     startDate: string;
@@ -164,6 +173,32 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
     if (weekDays.length === 0) return [];
     return getOccurrencesForDateRange(tasks, weekDays[0], weekDays[6]);
   }, [tasks, weekDays]);
+
+  const multiDayTasksForWeek = React.useMemo(() => {
+    const seen = new Set<string>();
+    return expandedTasksForWeek.filter(task => {
+      if (!task.deadline || !task.endTime) return false;
+      const baseId = task.id.split('::')[0];
+      if (seen.has(baseId)) return false;
+
+      const taskStart = new Date(task.deadline);
+      const taskEnd = new Date(task.endTime);
+      const isMulti = !isSameDay(taskStart, taskEnd) && taskEnd > taskStart;
+      if (!isMulti) return false;
+
+      const weekStart = weekDays[0];
+      const weekEnd = weekDays[6];
+      const startOfCurrentWeek = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
+      const endOfCurrentWeek = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate(), 23, 59, 59);
+
+      const inWeek = taskStart <= endOfCurrentWeek && taskEnd >= startOfCurrentWeek;
+      if (inWeek) {
+        seen.add(baseId);
+        return true;
+      }
+      return false;
+    });
+  }, [expandedTasksForWeek, weekDays]);
 
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -254,53 +289,168 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
   return (
     <div className="flex flex-col flex-1 h-[70vh] md:h-[75vh] min-h-[500px] bg-paper relative font-sans pb-12">
       {/* Header controls matching screenshot */}
-      <div className="flex justify-between items-end mb-4 pb-2 border-b-[6px] border-ink shrink-0">
-        <h2 className="font-sans text-3xl md:text-5xl font-black uppercase tracking-tighter leading-none flex flex-col">
+      <div className="flex justify-between items-end mb-4 pb-2 border-b-[6px] border-ink shrink-0 gap-2">
+        <h2 className="font-sans text-3xl md:text-5xl font-black uppercase tracking-tighter leading-none flex flex-col min-w-0">
           <span>This</span>
           <span>Week's</span>
           <span>Transit</span>
+          <span className="font-mono text-[9px] md:text-[11px] font-black tracking-widest text-[#EF4444] mt-1.5 uppercase truncate">
+            {format(weekDays[0], 'MMM dd')} — {format(weekDays[6], 'MMM dd, yyyy')}
+          </span>
         </h2>
-        <div className="flex items-center gap-2 mb-1">
-          <button onClick={handleToday} className="px-3 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-paper transition-all">TODAY</button>
-          <button onClick={handlePrevWeek} className="px-3 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-paper transition-all">PREV</button>
-          <button onClick={handleNextWeek} className="px-3 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-paper transition-all">NEXT</button>
+        <div className="flex flex-col items-end gap-2 mb-1 shrink-0">
+          <button 
+            onClick={onOpenBirthdays} 
+            className="px-2.5 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-taxi text-ink transition-all shrink-0 flex items-center gap-1.5 select-none cursor-pointer"
+          >
+            <Gift size={12} strokeWidth={2.5} /> BIRTHDAYS ({birthdays.length})
+          </button>
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+            <button onClick={handleToday} className="px-2.5 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-paper transition-all shrink-0">TODAY</button>
+            <button onClick={handlePrevWeek} className="px-2.5 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-paper transition-all shrink-0">PREV</button>
+            <button onClick={handleNextWeek} className="px-2.5 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-paper transition-all shrink-0">NEXT</button>
+          </div>
         </div>
       </div>
 
       <div className="flex-1 flex flex-col border-[6px] border-ink shadow-[6px_6px_0px_#1A1A1B] bg-paper overflow-x-auto overflow-y-hidden relative select-none">
         <div className="min-w-[720px] md:min-w-full flex-1 flex flex-col">
-          {/* Week Days Header */}
-          <div className="flex border-b-[4px] border-ink shrink-0 bg-paper z-10 sticky top-0">
-            <div className="w-10 md:w-12 border-r-[4px] border-ink flex items-center justify-center p-1 shrink-0 bg-paper sticky left-0 z-20">
-              <span className="font-mono text-[8px] uppercase font-bold tracking-widest leading-tight text-center">I<br/>S<br/>T</span>
-            </div>
-            <div className="flex-1 grid grid-cols-7">
-              {weekDays.map(day => {
-                const today = isSameDay(day, toIST(new Date()));
-                return (
-                  <div 
-                    key={day.toISOString()} 
-                    onClick={() => {
-                      const formattedDate = format(day, 'yyyy-MM-dd');
-                      handleCreateAtSlot(formattedDate, '10:30', '11:30');
-                    }}
-                    className={cn(
-                      "border-r-[4px] border-ink p-1 md:p-3 text-center flex flex-col items-center justify-center relative cursor-pointer hover:bg-paper-dark transition-colors select-none", 
-                      today ? "bg-taxi text-ink hover:bg-taxi-hover" : "bg-transparent"
-                    )}
-                    title="Click header to schedule dispatch on this date"
-                  >
-                    <span className="font-mono text-[8px] md:text-[10px] font-bold uppercase tracking-widest">{format(day, 'EEE')}</span>
-                    <span className={cn("font-sans text-lg md:text-3xl font-black mt-1", today ? "text-ink" : "text-ink")}>{format(day, 'd')}</span>
-                    {today && <div className="absolute top-1 left-1 w-2 h-2 rounded-full bg-subway-red animate-pulse" title="Current Station" />}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Scrollable Time Grid */}
           <div ref={gridRef} className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-hide">
+            
+            {/* Week Days Header inside the scroll container to align perfectly */}
+            <div className="z-30 sticky top-0 shrink-0 bg-paper border-b-[4px] border-ink">
+              <div className="flex border-b border-ink/40">
+                <div className="w-10 md:w-12 border-r-[4px] border-ink flex items-center justify-center p-1 shrink-0 bg-paper sticky left-0 z-40 block-decor">
+                  <span className="font-mono text-[8px] uppercase font-bold tracking-widest leading-tight text-center">I<br/>S<br/>T</span>
+                </div>
+                <div className="flex-1 grid grid-cols-7">
+                  {weekDays.map((day, dayIndex) => {
+                    const today = isSameDay(day, toIST(new Date()));
+                    const dayBirthdays = (birthdays || []).filter(bday => {
+                      if (!bday.date) return false;
+                      const parts = bday.date.split('-');
+                      if (parts.length < 3) return false;
+                      const bMonth = parseInt(parts[1], 10);
+                      const bDay = parseInt(parts[2], 10);
+                      return bMonth === (day.getMonth() + 1) && bDay === day.getDate();
+                    });
+
+                    return (
+                      <div 
+                        key={day.toISOString()} 
+                        onClick={() => {
+                          const formattedDate = format(day, 'yyyy-MM-dd');
+                          handleCreateAtSlot(formattedDate, '10:30', '11:30');
+                        }}
+                        className={cn(
+                          "border-r-[4px] border-ink p-1 md:p-3 text-center flex flex-col items-center justify-center relative cursor-pointer hover:bg-paper-dark transition-colors select-none min-h-[55px]", 
+                          today ? "bg-taxi text-ink hover:bg-taxi-hover" : "bg-transparent",
+                          dayIndex === 6 ? "border-r-0" : ""
+                        )}
+                        title="Click header to schedule dispatch on this date"
+                      >
+                        <span className="font-mono text-[8px] md:text-[10px] font-bold uppercase tracking-widest">{format(day, 'EEE')}</span>
+                        <span className={cn("font-sans text-lg md:text-3xl font-black mt-1", today ? "text-ink" : "text-ink")}>{format(day, 'd')}</span>
+                        {dayBirthdays.length > 0 && (
+                          <div className="mt-1 flex flex-col gap-1 w-full items-center px-1">
+                            {dayBirthdays.map(b => (
+                              <div 
+                                key={b.id} 
+                                className="bg-ink text-taxi border border-taxi text-[7px] md:text-[9px] font-mono uppercase font-black px-1.5 py-0.5 rounded flex items-center justify-center gap-0.5 select-none text-center max-w-full truncate shadow-[1px_1px_0px_#F7C331] leading-none"
+                                title={`🎂 ${b.name}'s Birthday`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenBirthdays();
+                                }}
+                              >
+                                🎂 {b.name}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {today && <div className="absolute top-1 left-1 w-2 h-2 rounded-full bg-subway-red animate-pulse" title="Current Station" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Multi-day / All-day Tasks spanning multiple days */}
+              {multiDayTasksForWeek.length > 0 && (
+                <div className="flex bg-paper-dark border-t border-ink shrink-0 relative">
+                  <div className="w-10 md:w-12 border-r-[4px] border-ink flex flex-col items-center justify-center p-1 shrink-0 bg-paper sticky left-0 z-40">
+                    <span className="font-mono text-[7px] uppercase font-black text-ink/50 tracking-wider text-center leading-none">SPAN</span>
+                  </div>
+                  <div className="flex-1 relative py-1 min-h-[36px] bg-paper/30 flex flex-col justify-center">
+                    {/* Background grid indicators */}
+                    <div className="absolute inset-0 grid grid-cols-7 pointer-events-none">
+                      {Array.from({ length: 7 }).map((_, idx) => (
+                        <div key={idx} className={cn("border-r-[4px] border-ink/10 h-full", idx === 6 ? "border-r-0" : "")} />
+                      ))}
+                    </div>
+                    
+                    {/* Spanning task cards */}
+                    <div className="flex flex-col gap-1 px-1 relative z-10 w-full">
+                      {multiDayTasksForWeek.map(task => {
+                        const taskStart = new Date(task.deadline!);
+                        const taskEnd = new Date(task.endTime!);
+
+                        const startDayStr = format(taskStart, 'yyyy-MM-dd');
+                        const endDayStr = format(taskEnd, 'yyyy-MM-dd');
+
+                        let startIndex = weekDays.findIndex(d => format(d, 'yyyy-MM-dd') === startDayStr);
+                        if (startIndex === -1) {
+                          startIndex = taskStart < weekDays[0] ? 0 : 6;
+                        }
+
+                        let endIndex = weekDays.findIndex(d => format(d, 'yyyy-MM-dd') === endDayStr);
+                        if (endIndex === -1) {
+                          endIndex = taskEnd > weekDays[6] ? 6 : 0;
+                        }
+
+                        const colSpan = Math.max(1, endIndex - startIndex + 1);
+                        const leftPct = (startIndex / 7) * 100;
+                        const widthPct = (colSpan / 7) * 100;
+
+                        return (
+                          <div
+                            key={task.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTask(task);
+                            }}
+                            style={{
+                              marginLeft: `${leftPct}%`,
+                              width: `calc(${widthPct}% - 6px)`,
+                            }}
+                            className={cn(
+                              "border-[2px] border-ink px-1.5 py-0.5 rounded-sm shadow-[1.5px_1.5px_0px_#1A1A1B] cursor-pointer hover:translate-y-[-0.5px] hover:shadow-[2.5px_2.5px_0px_#1A1A1B] transition-all select-none text-left relative overflow-hidden",
+                              getEventColor(task)
+                            )}
+                          >
+                            <div className={cn(
+                              "absolute left-0 top-0 bottom-0 w-1",
+                              task.priority === 'urgent' ? "bg-subway-red" : task.priority === 'medium' ? "bg-taxi" : "bg-ink/30"
+                            )} />
+                            <div className="flex items-center justify-between text-[9px] pl-1.5 font-bold uppercase leading-tight tracking-tight">
+                              <span className="truncate max-w-[70%]">
+                                {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse">⚡</span>}
+                                <span className={cn(task.status === 'done' && "line-through opacity-50")}>{task.title}</span>
+                              </span>
+                              <span className="font-mono text-[6.5px] font-semibold opacity-70 ml-1 shrink-0 bg-ink/5 px-1 rounded-xs">
+                                {format(taskStart, 'MMM d, h:mm a')} — {format(taskEnd, 'MMM d, h:mm a')}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex relative pb-20">
               
               {/* Time Labels Rail */}
@@ -341,7 +491,16 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                 </div>
 
                 {weekDays.map((day, dayIndex) => {
-                  const dayTasks = expandedTasksForWeek.filter(t => t.deadline && isSameDay(new Date(t.deadline), day));
+                  const dayTasks = expandedTasksForWeek.filter(t => {
+                    if (!t.deadline) return false;
+                    const sameDay = isSameDay(new Date(t.deadline), day);
+                    if (!sameDay) return false;
+                    if (t.endTime) {
+                      const isMulti = !isSameDay(new Date(t.deadline), new Date(t.endTime)) && new Date(t.endTime) > new Date(t.deadline);
+                      if (isMulti) return false;
+                    }
+                    return true;
+                  });
                   const dayLayouts = getEventLayouts(dayTasks, hourTops, hourHeights);
                   
                   return (
@@ -636,16 +795,86 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
               </div>
 
               {/* Actions */}
-              <div className="pt-2 flex justify-between gap-4">
-                <button
-                  onClick={() => {
-                    deleteTask(selectedTask.id);
-                    setSelectedTask(null);
-                  }}
-                  className="flex-1 bg-[#EF4444] text-white border-[3px] border-ink py-2.5 font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all"
-                >
-                  Annihilate Dispatch
-                </button>
+              <div className="pt-2 flex flex-col gap-4 w-full">
+                {selectedTask.id.includes('::') ? (
+                  <div className="flex gap-3 w-full">
+                    {/* Deletion Scope Selector Button */}
+                    <div className="relative w-2/5 min-h-[42px] flex">
+                      <button
+                        type="button"
+                        onClick={() => setIsDeleteSelectorOpen(!isDeleteSelectorOpen)}
+                        className="w-full bg-[#FFFEEF] text-ink border-[3px] border-ink py-2 px-1.5 font-mono text-[9px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] hover:bg-taxi/20 active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all text-center flex items-center justify-center gap-1.5"
+                        title="Select scope of deletion"
+                      >
+                        <span className="truncate">{deleteMode === 'this' ? 'Only This' : deleteMode === 'following' ? 'Following' : 'All'}</span>
+                        <span className="text-[7px] shrink-0">▼</span>
+                      </button>
+                      
+                      {isDeleteSelectorOpen && (
+                        <>
+                          <div className="fixed inset-0 z-[100]" onClick={() => setIsDeleteSelectorOpen(false)} />
+                          <div className="absolute left-0 bottom-full mb-1.5 bg-[#FFFEEF] border-[3px] border-ink text-ink font-mono text-[9px] font-black uppercase shadow-[4px_4px_0px_#1a1a1b] w-[140px] z-[110] flex flex-col rounded-sm">
+                            <div className="px-2 py-1 bg-ink text-paper text-[8px] font-black border-b-[3px] border-ink uppercase tracking-wider">
+                              Scope of Removal
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteMode('this');
+                                setIsDeleteSelectorOpen(false);
+                              }}
+                              className={`px-2 py-2 text-left border-b-2 border-ink hover:bg-ink hover:text-paper transition-all ${deleteMode === 'this' ? 'bg-taxi/30 text-ink' : ''}`}
+                            >
+                              Only This Event
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteMode('following');
+                                setIsDeleteSelectorOpen(false);
+                              }}
+                              className={`px-2 py-2 text-left border-b-2 border-ink hover:bg-ink hover:text-paper transition-all ${deleteMode === 'following' ? 'bg-taxi/30 text-ink' : ''}`}
+                            >
+                              This & Following
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteMode('all');
+                                setIsDeleteSelectorOpen(false);
+                              }}
+                              className={`px-2 py-2 text-left hover:bg-ink hover:text-paper transition-all ${deleteMode === 'all' ? 'bg-taxi/30 text-ink' : ''}`}
+                            >
+                              All Events
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Trigger Button */}
+                    <button
+                      onClick={() => {
+                        deleteTask(selectedTask.id, deleteMode);
+                        setSelectedTask(null);
+                      }}
+                      className="w-3/5 bg-[#EF4444] text-white border-[3px] border-ink py-2 font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all flex items-center justify-center min-h-[42px]"
+                      title="Annihilate selected instances"
+                    >
+                      Annihilate
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      deleteTask(selectedTask.id);
+                      setSelectedTask(null);
+                    }}
+                    className="flex-1 bg-[#EF4444] text-white border-[3px] border-ink py-2.5 font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all"
+                  >
+                    Annihilate Dispatch
+                  </button>
+                )}
                 <button
                   onClick={() => setSelectedTask(null)}
                   className="flex-1 bg-paper border-[3px] border-ink py-2.5 font-mono text-[10px] font-black uppercase hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all"
@@ -659,6 +888,8 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
           </div>
         </div>
       )}
+
+      {/* Birthdays Manager Modal was removed because it is now rendered globally at the app root level */}
 
     </div>
   );
@@ -769,7 +1000,7 @@ function DrawForm({
   onComplete
 }: { 
   addTask: (t: any) => void;
-  updateTask?: (id: string, updatedFields: Partial<Omit<Task, 'id'>> & { updateAllOccurrences?: boolean }) => void;
+  updateTask?: (id: string, updatedFields: Partial<Omit<Task, 'id'>> & { updateMode?: 'this' | 'following' | 'all' }) => void;
   initialTask?: Task | null;
   initialStartDate?: string;
   initialEndDate?: string;
@@ -826,7 +1057,7 @@ function DrawForm({
 
   const [isRecurringSelectorOpen, setIsRecurringSelectorOpen] = useState(false);
   const isRecurringInstance = !!initialTask && initialTask.id.includes('::');
-  const [updateAllOccurrences, setUpdateAllOccurrences] = useState(false);
+  const [updateMode, setUpdateMode] = useState<'this' | 'following' | 'all'>('this');
 
   const [isStartPickerOpen, setIsStartPickerOpen] = useState(false);
   const [isEndPickerOpen, setIsEndPickerOpen] = useState(false);
@@ -933,7 +1164,7 @@ function DrawForm({
         endTime: endDateTime,
         recurring,
         recurrenceRule: resolvedRule,
-        updateAllOccurrences,
+        updateMode,
       });
     } else {
       addTask({
@@ -959,13 +1190,13 @@ function DrawForm({
           <p className="font-sans font-bold text-xs uppercase leading-snug">
             This is an occurrence part of a repeating schedule. How do you wish to apply your modifications?
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 pt-2 mt-2 border-t border-ink/15">
+          <div className="flex flex-col gap-2 pt-2 mt-2 border-t border-ink/15">
             <label className="flex items-center gap-2 cursor-pointer font-mono text-[10px] uppercase font-bold text-ink/85">
               <input 
                 type="radio" 
-                name="updateAllOccurrences"
-                checked={!updateAllOccurrences} 
-                onChange={() => setUpdateAllOccurrences(false)} 
+                name="updateMode"
+                checked={updateMode === 'this'} 
+                onChange={() => setUpdateMode('this')} 
                 className="accent-ink scale-110"
               />
               Only this instance
@@ -973,9 +1204,19 @@ function DrawForm({
             <label className="flex items-center gap-2 cursor-pointer font-mono text-[10px] uppercase font-bold text-ink/85">
               <input 
                 type="radio" 
-                name="updateAllOccurrences"
-                checked={updateAllOccurrences} 
-                onChange={() => setUpdateAllOccurrences(true)} 
+                name="updateMode"
+                checked={updateMode === 'following'} 
+                onChange={() => setUpdateMode('following')} 
+                className="accent-ink scale-110"
+              />
+              This and following events
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer font-mono text-[10px] uppercase font-bold text-ink/85">
+              <input 
+                type="radio" 
+                name="updateMode"
+                checked={updateMode === 'all'} 
+                onChange={() => setUpdateMode('all')} 
                 className="accent-ink scale-110"
               />
               All recurring instances
