@@ -1,0 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+
+  --color-paper: #F4F1EA;
+  --color-paper-dark: #E2DFD8;
+  --color-ink: #1A1A1B;
+  --color-ink-light: #5A5A5C;
+  --color-taxi: #F7C331;
+  --color-taxi-hover: #E5B220;
+  --color-subway-red: #EF4444;
+  --color-subway-blue: #3B82F6;
+  --color-teal: #4A7A78;
+  --color-orange: #C0593B;
+  --color-olive: #7A8068;
+}
+
+@layer base {
+  html, body {
+    @apply bg-paper text-ink font-sans antialiased;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  ::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+}
+
+.vintage-border {
+  @apply border-2 border-ink;
+}
+
+.vintage-border-thick {
+  @apply border-4 border-ink;
+}
+
+.vintage-shadow {
+  box-shadow: 4px 4px 0px 0px var(--color-ink);
+}
+
+.vintage-shadow-hover {
+  @apply transition-all duration-200;
+}
+
+.vintage-shadow-hover:hover {
+  box-shadow: 6px 6px 0px 0px var(--color-ink);
+  transform: translate(-2px, -2px);
+}
+
+.vintage-shadow-hover:active {
+  box-shadow: 2px 2px 0px 0px var(--color-ink);
+  transform: translate(2px, 2px);
+}
+
+.newspaper-divider {
+  @apply border-b-2 border-ink my-4 relative;
+}
+.newspaper-divider::before {
+  content: '';
+  @apply absolute left-0 right-0 -top-[6px] border-t border-ink;
+}
+
+.ds-button {
+  @apply bg-paper border-2 border-ink px-4 py-2 font-mono font-bold uppercase tracking-wider text-sm cursor-pointer active:bg-paper-dark disabled:opacity-50 disabled:cursor-not-allowed;
+  transition: all 0.2s;
+}
+.ds-button:hover {
+  box-shadow: 6px 6px 0px 0px var(--color-ink);
+  transform: translate(-2px, -2px);
+}
+.ds-button:active {
+  box-shadow: 2px 2px 0px 0px var(--color-ink);
+  transform: translate(2px, 2px);
+}
+.ds-button-primary {
+  @apply bg-taxi text-ink;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}

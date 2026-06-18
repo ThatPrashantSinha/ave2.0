@@ -1,0 +1,10 @@
+{
+  "name": "AVE2.0",
+  "description": "",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
