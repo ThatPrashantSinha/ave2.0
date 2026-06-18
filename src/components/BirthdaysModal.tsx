@@ -32,9 +32,10 @@ export function BirthdaysModal({
   birthdays,
   addBirthday,
   deleteBirthday
-}: BirthdaysModalProps) {
+ }: BirthdaysModalProps) {
   const [selectedMonth, setSelectedMonth] = useState('01');
   const [selectedDay, setSelectedDay] = useState('01');
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -210,14 +211,37 @@ export function BirthdaysModal({
                         <p className="font-sans font-bold text-xs text-ink">{bday.name}</p>
                         <p className="font-mono text-[9px] text-ink/60 uppercase font-bold mt-0.5">📅 {dateFormatted}</p>
                       </div>
-                      <button 
-                        type="button"
-                        onClick={() => deleteBirthday(bday.id)} 
-                        className="p-1.5 text-ink hover:text-subway-red border-2 border-transparent hover:border-ink hover:bg-paper-dark transition-all rounded animate-none cursor-pointer"
-                        title="Delete entry"
-                      >
-                        <Trash2 size={13} strokeWidth={2.5} />
-                      </button>
+                      {confirmingId === bday.id ? (
+                        <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-150">
+                          <span className="font-mono text-[9px] font-black uppercase text-subway-red mr-1 select-none">SURE?</span>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              deleteBirthday(bday.id);
+                              setConfirmingId(null);
+                            }}
+                            className="px-2 py-1 bg-subway-red text-white border-2 border-ink font-mono text-[9px] font-black uppercase hover:bg-black hover:text-white transition-all cursor-pointer shadow-[1px_1px_0px_#1A1A1B] active:shadow-none active:translate-y-[0.5px]"
+                          >
+                            YES
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => setConfirmingId(null)}
+                            className="px-2 py-1 bg-paper border-2 border-ink font-mono text-[9px] font-black uppercase hover:bg-ink hover:text-paper transition-all cursor-pointer shadow-[1px_1px_0px_#1A1A1B] active:shadow-none active:translate-y-[0.5px]"
+                          >
+                            NO
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          type="button"
+                          onClick={() => setConfirmingId(bday.id)} 
+                          className="p-1.5 text-ink hover:text-subway-red border-2 border-transparent hover:border-ink hover:bg-paper-dark transition-all rounded animate-none cursor-pointer"
+                          title="Delete entry"
+                        >
+                          <Trash2 size={13} strokeWidth={2.5} />
+                        </button>
+                      )}
                     </div>
                   );
                 })}

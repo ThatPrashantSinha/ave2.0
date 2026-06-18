@@ -136,10 +136,12 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [deleteMode, setDeleteMode] = useState<'this' | 'following' | 'all'>('this');
   const [isDeleteSelectorOpen, setIsDeleteSelectorOpen] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   useEffect(() => {
     setDeleteMode('this');
     setIsDeleteSelectorOpen(false);
+    setIsConfirmingDelete(false);
   }, [selectedTask]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [prefilledValues, setPrefilledValues] = useState<{
@@ -280,7 +282,7 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
   };
 
   const getEventColor = (task: Task) => {
-    if (task.status === 'done') return 'bg-olive text-paper border-ink';
+    if (task.status === 'done') return 'bg-[#E3DFD5] text-ink/40 border-dashed border-ink/40 line-through opacity-60';
     if (task.priority === 'urgent') return 'bg-taxi text-ink border-ink';
     if (task.tags?.includes('Focus')) return 'bg-ink text-paper border-taxi';
     return 'bg-paper text-ink border-ink';
@@ -431,7 +433,7 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                           >
                             <div className={cn(
                               "absolute left-0 top-0 bottom-0 w-1",
-                              task.priority === 'urgent' ? "bg-subway-red" : task.priority === 'medium' ? "bg-taxi" : "bg-ink/30"
+                              task.status === 'done' ? "bg-ink/10" : (task.priority === 'urgent' ? "bg-subway-red" : task.priority === 'medium' ? "bg-taxi" : "bg-ink/30")
                             )} />
                             <div className="flex items-center justify-between text-[9px] pl-1.5 font-bold uppercase leading-tight tracking-tight">
                               <span className="truncate max-w-[70%]">
@@ -551,7 +553,7 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                           {/* Priority Indicator Line on Left Side */}
                           <div className={cn(
                             "absolute left-0 top-0 bottom-0 w-1",
-                            task.priority === 'urgent' ? "bg-subway-red" : task.priority === 'medium' ? "bg-taxi" : "bg-ink/30"
+                            task.status === 'done' ? "bg-ink/10" : (task.priority === 'urgent' ? "bg-subway-red" : task.priority === 'medium' ? "bg-taxi" : "bg-ink/30")
                           )} />
 
                           <div className="flex flex-col h-full justify-between pl-1 pb-0.5">
@@ -559,12 +561,15 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                             <div className="flex items-center justify-between gap-1 select-none">
                               <span className={cn(
                                 "font-mono text-[6px] md:text-[7.5px] font-extrabold uppercase px-1 border border-ink/20 scale-90 origin-left shrink-0",
-                                task.priority === 'urgent' && "bg-subway-red/10 text-subway-red border-subway-red/30"
+                                task.status === 'done' ? "bg-transparent text-ink/30 border-ink/10" : (task.priority === 'urgent' && "bg-subway-red/10 text-subway-red border-subway-red/30")
                               )}>
                                 {task.priority === 'urgent' ? 'P1 Urgent' : task.priority === 'medium' ? 'P2 Med' : 'P3 Low'}
                               </span>
                               {task.tags && task.tags.length > 0 && (
-                                <span className="hidden sm:inline font-mono text-[6px] md:text-[7.5px] font-semibold uppercase text-ink/60 bg-paper-dark border border-ink/20 px-0.5 truncate scale-90 origin-right">
+                                <span className={cn(
+                                  "hidden sm:inline font-mono text-[6px] md:text-[7.5px] font-semibold uppercase border px-0.5 truncate scale-90 origin-right",
+                                  task.status === 'done' ? "text-ink/30 bg-transparent border-ink/10" : "text-ink/60 bg-paper-dark border-ink/20"
+                                )}>
                                   {task.tags[0]}
                                 </span>
                               )}
@@ -573,7 +578,7 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                             {/* Title */}
                             <div className={cn(
                               "font-sans font-black uppercase text-[9px] md:text-[11px] leading-tight line-clamp-2 mt-0.5 tracking-tight",
-                              task.status === 'done' ? "line-through opacity-50 text-ink/70" : "text-ink"
+                              task.status === 'done' ? "line-through text-ink/40" : "text-ink"
                             )}>
                               {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
                               {task.title}
@@ -592,18 +597,6 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                                 ) : 'ANY'}
                               </span>
                               <div className="flex items-center gap-1 shrink-0 select-none">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingTask(task);
-                                    setIsDrawerOpen(true);
-                                  }}
-                                  className="text-ink hover:bg-taxi border border-ink p-0.5 rounded-xs transition-all bg-paper shadow-[0.5px_0.5px_0px_#1A1A1B] active:shadow-none active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer flex items-center justify-center font-black leading-none"
-                                  title="Edit dispatch parameters"
-                                >
-                                  <Edit size={7} strokeWidth={3} className="text-ink" />
-                                </button>
                                 {task.status === 'done' && (
                                   <span className="text-green-700 font-extrabold text-[8px] md:text-[10px] leading-none">✓</span>
                                 )}
@@ -737,28 +730,89 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
               </div>
 
               {/* Deadline & Time */}
-              <div className="grid grid-cols-2 gap-4 border-b-2 border-dashed border-ink/40 pb-4">
-                <div>
-                  <span className="font-mono text-[9px] font-bold uppercase tracking-widest opacity-60 block">Boarding Date</span>
-                  <span className="font-sans font-bold text-sm uppercase text-ink">
-                    {selectedTask.deadline ? format(new Date(selectedTask.deadline), 'dd MMM yyyy') : 'No Date'}
+              <div className="border-[3px] border-ink bg-paper divide-y-[3px] divide-ink overflow-hidden shadow-[3px_3px_0px_#1A1A1B] select-none">
+                {/* Header banner */}
+                <div className="bg-ink text-paper px-3 py-1.5 flex justify-between items-center">
+                  <span className="font-mono text-[9px] font-black uppercase tracking-wider">
+                    DEPARTURE & ARRIVAL TRANSIT LOG
+                  </span>
+                  <span className="font-mono text-[8px] opacity-75 font-bold">
+                    DOCKET NO. {selectedTask.id ? selectedTask.id.slice(0, 6).toUpperCase() : 'N/A'}
                   </span>
                 </div>
-                <div>
-                  <span className="font-mono text-[9px] font-bold uppercase tracking-widest opacity-60 block">Transit Windows</span>
-                  <div className="font-sans font-bold text-[12px] md:text-sm uppercase text-ink flex flex-col gap-1 mt-0.5">
-                    <span className="flex items-center gap-1.5">
-                      <span className="font-mono text-[8px] bg-ink text-paper px-1 py-0.5 rounded-xs font-black">DEP</span>
-                      {selectedTask.deadline ? format(new Date(selectedTask.deadline), 'hh:mm a') : 'Anytime'}
+                
+                {/* Information Grid */}
+                <div className={`grid ${selectedTask.endTime ? 'grid-cols-2 divide-x-[3px] divide-ink' : 'grid-cols-1'}`}>
+                  {/* Departure Block */}
+                  <div className="p-3 bg-[#FFFDF5]">
+                    <span className="font-mono text-[9px] font-black uppercase tracking-wider text-subway-red block mb-1">
+                      ◀ DEPARTURE / BOARDING
                     </span>
-                    {selectedTask.endTime && (
-                      <span className="flex items-center gap-1.5">
-                        <span className="font-mono text-[8px] bg-ink text-paper px-1 py-0.5 rounded-xs font-black animate-pulse">ARR</span>
-                        {format(new Date(selectedTask.endTime), 'hh:mm a')}
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-sans font-black text-2xl tracking-tighter text-ink leading-none">
+                        {selectedTask.deadline ? format(new Date(selectedTask.deadline), 'dd') : '--'}
                       </span>
-                    )}
+                      <div className="flex flex-col">
+                        <span className="font-sans font-extrabold text-[11px] uppercase text-ink leading-none">
+                          {selectedTask.deadline ? format(new Date(selectedTask.deadline), 'MMM yyyy') : 'NO DATE'}
+                        </span>
+                        <span className="font-mono text-[8px] font-black text-ink/60 uppercase mt-0.5 leading-none">
+                          {selectedTask.deadline ? format(new Date(selectedTask.deadline), 'EEEE') : ''}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Departure Time */}
+                    <div className="mt-3 pt-2 border-t border-dashed border-ink/35 flex items-center gap-1.5">
+                      <span className="font-mono text-[8px] bg-ink text-paper px-1.5 py-0.5 font-black uppercase tracking-wider rounded-xs leading-none">
+                        DEP
+                      </span>
+                      <span className="font-sans font-black text-xs uppercase text-ink leading-none">
+                        {selectedTask.deadline ? format(new Date(selectedTask.deadline), 'hh:mm a') : 'ANYTIME'}
+                      </span>
+                    </div>
                   </div>
+
+                  {/* Arrival Block (if selectedTask.endTime exists) */}
+                  {selectedTask.endTime && (
+                    <div className="p-3 bg-[#FFFEEF]">
+                      <span className="font-mono text-[9px] font-black uppercase tracking-wider text-[#10B981] block mb-1">
+                        ▶ ARRIVAL / DISCHARGE
+                      </span>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-sans font-black text-2xl tracking-tighter text-ink leading-none">
+                          {format(new Date(selectedTask.endTime), 'dd')}
+                        </span>
+                        <div className="flex flex-col">
+                          <span className="font-sans font-extrabold text-[11px] uppercase text-ink leading-none">
+                            {format(new Date(selectedTask.endTime), 'MMM yyyy')}
+                          </span>
+                          <span className="font-mono text-[8px] font-black text-ink/60 uppercase mt-0.5 leading-none">
+                            {format(new Date(selectedTask.endTime), 'EEEE')}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Arrival Time */}
+                      <div className="mt-3 pt-2 border-t border-dashed border-ink/35 flex items-center gap-1.5">
+                        <span className="font-mono text-[8px] bg-ink text-paper px-1.5 py-0.5 font-black uppercase tracking-wider rounded-xs leading-none">
+                          ARR
+                        </span>
+                        <span className="font-sans font-black text-xs uppercase text-ink leading-none">
+                          {format(new Date(selectedTask.endTime), 'hh:mm a')}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Single day footer if no endTime */}
+                {!selectedTask.endTime && (
+                  <div className="bg-[#FFFEEF] px-3 py-2 flex items-center justify-between text-ink">
+                    <span className="font-mono text-[8px] font-black uppercase opacity-60">Transit Scope</span>
+                    <span className="font-sans font-extrabold text-[10px] uppercase flex items-center gap-1">
+                      ⚡ SINGLE-DAY DISPATCH PASS
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Description / Notes */}
@@ -796,91 +850,127 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
 
               {/* Actions */}
               <div className="pt-2 flex flex-col gap-4 w-full">
-                {selectedTask.id.includes('::') ? (
-                  <div className="flex gap-3 w-full">
-                    {/* Deletion Scope Selector Button */}
-                    <div className="relative w-2/5 min-h-[42px] flex">
+                {isConfirmingDelete ? (
+                  <div className="bg-[#EF4444]/15 border-[3px] border-dashed border-[#EF4444] p-4 text-center space-y-3 animate-in fade-in zoom-in-95 duration-150">
+                    <p className="font-mono text-[9px] font-black uppercase text-[#EF4444] tracking-wider">
+                      ⚠ Confirm annihilation of this dispatch?
+                    </p>
+                    {selectedTask.id.includes('::') && (
+                      <p className="font-mono text-[8.5px] font-black uppercase text-ink bg-taxi px-1.5 py-0.5 inline-block border border-ink">
+                        Scope: {deleteMode === 'this' ? 'THIS INSTANCE ONLY' : deleteMode === 'following' ? 'THIS & FOLLOWING' : 'ALL INSTANCES'}
+                      </p>
+                    )}
+                    <div className="flex gap-3">
                       <button
                         type="button"
-                        onClick={() => setIsDeleteSelectorOpen(!isDeleteSelectorOpen)}
-                        className="w-full bg-[#FFFEEF] text-ink border-[3px] border-ink py-2 px-1.5 font-mono text-[9px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] hover:bg-taxi/20 active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all text-center flex items-center justify-center gap-1.5"
-                        title="Select scope of deletion"
+                        onClick={() => {
+                          if (selectedTask.id.includes('::')) {
+                            deleteTask(selectedTask.id, deleteMode);
+                          } else {
+                            deleteTask(selectedTask.id);
+                          }
+                          setSelectedTask(null);
+                        }}
+                        className="flex-1 bg-[#EF4444] text-white border-[3px] border-ink py-2 font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all cursor-pointer"
                       >
-                        <span className="truncate">{deleteMode === 'this' ? 'Only This' : deleteMode === 'following' ? 'Following' : 'All'}</span>
-                        <span className="text-[7px] shrink-0">▼</span>
+                        YES, DELETE
                       </button>
-                      
-                      {isDeleteSelectorOpen && (
-                        <>
-                          <div className="fixed inset-0 z-[100]" onClick={() => setIsDeleteSelectorOpen(false)} />
-                          <div className="absolute left-0 bottom-full mb-1.5 bg-[#FFFEEF] border-[3px] border-ink text-ink font-mono text-[9px] font-black uppercase shadow-[4px_4px_0px_#1a1a1b] w-[140px] z-[110] flex flex-col rounded-sm">
-                            <div className="px-2 py-1 bg-ink text-paper text-[8px] font-black border-b-[3px] border-ink uppercase tracking-wider">
-                              Scope of Removal
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDeleteMode('this');
-                                setIsDeleteSelectorOpen(false);
-                              }}
-                              className={`px-2 py-2 text-left border-b-2 border-ink hover:bg-ink hover:text-paper transition-all ${deleteMode === 'this' ? 'bg-taxi/30 text-ink' : ''}`}
-                            >
-                              Only This Event
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDeleteMode('following');
-                                setIsDeleteSelectorOpen(false);
-                              }}
-                              className={`px-2 py-2 text-left border-b-2 border-ink hover:bg-ink hover:text-paper transition-all ${deleteMode === 'following' ? 'bg-taxi/30 text-ink' : ''}`}
-                            >
-                              This & Following
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setDeleteMode('all');
-                                setIsDeleteSelectorOpen(false);
-                              }}
-                              className={`px-2 py-2 text-left hover:bg-ink hover:text-paper transition-all ${deleteMode === 'all' ? 'bg-taxi/30 text-ink' : ''}`}
-                            >
-                              All Events
-                            </button>
-                          </div>
-                        </>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setIsConfirmingDelete(false)}
+                        className="flex-1 bg-paper border-[3px] border-ink py-2 font-mono text-[10px] font-black uppercase hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all cursor-pointer"
+                      >
+                        NO, KEEP IT
+                      </button>
                     </div>
-
-                    {/* Trigger Button */}
-                    <button
-                      onClick={() => {
-                        deleteTask(selectedTask.id, deleteMode);
-                        setSelectedTask(null);
-                      }}
-                      className="w-3/5 bg-[#EF4444] text-white border-[3px] border-ink py-2 font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all flex items-center justify-center min-h-[42px]"
-                      title="Annihilate selected instances"
-                    >
-                      Annihilate
-                    </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => {
-                      deleteTask(selectedTask.id);
-                      setSelectedTask(null);
-                    }}
-                    className="flex-1 bg-[#EF4444] text-white border-[3px] border-ink py-2.5 font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all"
-                  >
-                    Annihilate Dispatch
-                  </button>
+                  <>
+                    {selectedTask.id.includes('::') ? (
+                      <div className="flex gap-3 w-full">
+                        {/* Deletion Scope Selector Button */}
+                        <div className="relative w-2/5 min-h-[42px] flex">
+                          <button
+                            type="button"
+                            onClick={() => setIsDeleteSelectorOpen(!isDeleteSelectorOpen)}
+                            className="w-full bg-[#FFFEEF] text-ink border-[3px] border-ink py-2 px-1.5 font-mono text-[9px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] hover:bg-taxi/20 active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all text-center flex items-center justify-center gap-1.5"
+                            title="Select scope of deletion"
+                          >
+                            <span className="truncate">{deleteMode === 'this' ? 'Only This' : deleteMode === 'following' ? 'Following' : 'All'}</span>
+                            <span className="text-[7px] shrink-0">▼</span>
+                          </button>
+                          
+                          {isDeleteSelectorOpen && (
+                            <>
+                              <div className="fixed inset-0 z-[100]" onClick={() => setIsDeleteSelectorOpen(false)} />
+                              <div className="absolute left-0 bottom-full mb-1.5 bg-[#FFFEEF] border-[3px] border-ink text-ink font-mono text-[9px] font-black uppercase shadow-[4px_4px_0px_#1a1a1b] w-[140px] z-[110] flex flex-col rounded-sm">
+                                <div className="px-2 py-1 bg-ink text-paper text-[8px] font-black border-b-[3px] border-ink uppercase tracking-wider">
+                                  Scope of Removal
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeleteMode('this');
+                                    setIsDeleteSelectorOpen(false);
+                                  }}
+                                  className={`px-2 py-2 text-left border-b-2 border-ink hover:bg-ink hover:text-paper transition-all ${deleteMode === 'this' ? 'bg-taxi/30 text-ink' : ''}`}
+                                >
+                                  Only This Event
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeleteMode('following');
+                                    setIsDeleteSelectorOpen(false);
+                                  }}
+                                  className={`px-2 py-2 text-left border-b-2 border-ink hover:bg-ink hover:text-paper transition-all ${deleteMode === 'following' ? 'bg-taxi/30 text-ink' : ''}`}
+                                >
+                                  This & Following
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeleteMode('all');
+                                    setIsDeleteSelectorOpen(false);
+                                  }}
+                                  className={`px-2 py-2 text-left hover:bg-ink hover:text-paper transition-all ${deleteMode === 'all' ? 'bg-taxi/30 text-ink' : ''}`}
+                                >
+                                  All Events
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Trigger Button */}
+                        <button
+                          onClick={() => {
+                            setIsConfirmingDelete(true);
+                          }}
+                          className="w-3/5 bg-[#EF4444] text-white border-[3px] border-ink py-2 font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all flex items-center justify-center min-h-[42px]"
+                          title="Annihilate selected instances"
+                        >
+                          Annihilate
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setIsConfirmingDelete(true);
+                        }}
+                        className="flex-1 bg-[#EF4444] text-[#FFFFFF] border-[3px] border-ink py-2.5 font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all cursor-pointer"
+                      >
+                        Annihilate Dispatch
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setSelectedTask(null)}
+                      className="flex-1 bg-paper border-[3px] border-ink py-2.5 font-mono text-[10px] font-black uppercase hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all"
+                    >
+                      Close Dossier
+                    </button>
+                  </>
                 )}
-                <button
-                  onClick={() => setSelectedTask(null)}
-                  className="flex-1 bg-paper border-[3px] border-ink py-2.5 font-mono text-[10px] font-black uppercase hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all"
-                >
-                  Close Dossier
-                </button>
               </div>
 
             </div>
