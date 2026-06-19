@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, getHours, getMinutes, addHours } from 'date-fns';
 import { Task, Birthday } from '../types';
 import { cn, toIST } from '../lib/utils';
-import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit, Gift, Trash2 } from 'lucide-react';
+import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit, Gift, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { AnalogClockPicker } from '../components/AnalogClockPicker';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
+import { SketchPushPin } from '../components/SketchPushPin';
 
 interface WeeklyCalendarProps {
   tasks: Task[];
@@ -130,8 +131,192 @@ function getEventLayouts(dayTasks: Task[], hourTops: number[], hourHeights: numb
   return layouts;
 }
 
+function formatIndianTime(hour: number, minute: number): string {
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const h = hour % 12 === 0 ? 12 : hour % 12;
+  const m = String(minute).padStart(2, '0');
+  return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
+}
+
+function to12HourFrom24(hour24: number): { hour12: number; ampm: 'AM' | 'PM' } {
+  const ampm = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return { hour12, ampm };
+}
+
+function to24HourFrom12(hour12: number, ampm: 'AM' | 'PM'): number {
+  let hr = hour12;
+  if (ampm === 'PM' && hr !== 12) {
+    hr += 12;
+  } else if (ampm === 'AM' && hr === 12) {
+    hr = 0;
+  }
+  return hr;
+}
+
+function formatTaskTimeRange(task: Task): string {
+  if (!task.deadline) return 'ANY';
+  const start = new Date(task.deadline);
+  const startTimeStr = formatIndianTime(start.getHours(), start.getMinutes());
+  if (task.endTime) {
+    const end = new Date(task.endTime);
+    const endTimeStr = formatIndianTime(end.getHours(), end.getMinutes());
+    return `${startTimeStr} - ${endTimeStr}`;
+  }
+  return startTimeStr;
+}
+
 export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateTask, birthdays, onOpenBirthdays }: WeeklyCalendarProps) {
   const [currentDate, setCurrentDate] = useState(toIST(new Date()));
+  const [activePopoverPinId, setActivePopoverPinId] = useState<string | null>(null);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [pickerMonth, setPickerMonth] = useState<Date>(currentDate);
+  const [now, setNow] = useState(toIST(new Date()));
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(toIST(new Date()));
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!activePopoverPinId) return;
+    const handleGlobalClick = () => {
+      setActivePopoverPinId(null);
+    };
+    window.addEventListener('click', handleGlobalClick);
+    return () => {
+      window.removeEventListener('click', handleGlobalClick);
+    };
+  }, [activePopoverPinId]);
+
+  // Time Section Pins Feature States & Type definitions
+  interface TimePin {
+    id: string;
+    name: string;
+    startHour: number;
+    startMinute: number;
+    endHour: number;
+    endMinute: number;
+    color: string;
+  }
+
+  const [timePins, setTimePins] = useState<TimePin[]>(() => {
+    try {
+      const saved = localStorage.getItem('daily_docket_time_pins2');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    // High-value, beautifully styled vintage default presets matching daily dispatcher roles
+    return [
+      { id: '1', name: 'Morning Docket', startHour: 7, startMinute: 0, endHour: 9, endMinute: 30, color: '#F7C331' }, // Taxi Yellow
+      { id: '2', name: 'Deep Work Sprint', startHour: 10, startMinute: 0, endHour: 13, endMinute: 0, color: '#EF4444' }, // Subway Red
+      { id: '3', name: 'Recess Interlude', startHour: 13, startMinute: 0, endHour: 14, endMinute: 30, color: '#10B981' }, // Neon Teal
+      { id: '4', name: 'Evening Dispatch', startHour: 17, startMinute: 0, endHour: 18, endMinute: 30, color: '#3B82F6' } // Subway Blue
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('daily_docket_time_pins2', JSON.stringify(timePins));
+  }, [timePins]);
+
+  // Modal State for Time Pins
+  const [pinModal, setPinModal] = useState<{
+    isOpen: boolean;
+    pinId?: string; // defined if editing
+    defaultHour?: number; // prefill
+  }>({ isOpen: false });
+
+  const [isConfirmingPinDelete, setIsConfirmingPinDelete] = useState(false);
+
+  useEffect(() => {
+    if (!pinModal.isOpen) {
+      setIsConfirmingPinDelete(false);
+    }
+  }, [pinModal.isOpen]);
+
+  // Pin Form Fields
+  const [pinFormName, setPinFormName] = useState('');
+  const [pinFormStartHour, setPinFormStartHour] = useState(9);
+  const [pinFormStartMinute, setPinFormStartMinute] = useState(0);
+  const [pinFormEndHour, setPinFormEndHour] = useState(12);
+  const [pinFormEndMinute, setPinFormEndMinute] = useState(0);
+  const [pinFormColor, setPinFormColor] = useState('#F7C331');
+  const [pinFormError, setPinFormError] = useState('');
+
+  // Handlers for Pins modal
+  const handleOpenCreatePin = (defaultHour?: number) => {
+    setPinFormName('');
+    const hr = typeof defaultHour === 'number' ? defaultHour : 9;
+    setPinFormStartHour(hr);
+    setPinFormStartMinute(0);
+    setPinFormEndHour(Math.min(23, hr + 1));
+    setPinFormEndMinute(30);
+    setPinFormColor('#F7C331');
+    setPinFormError('');
+    setPinModal({ isOpen: true, defaultHour });
+  };
+
+  const handleOpenEditPin = (pin: TimePin) => {
+    setPinFormName(pin.name);
+    setPinFormStartHour(pin.startHour);
+    setPinFormStartMinute(pin.startMinute);
+    setPinFormEndHour(pin.endHour);
+    setPinFormEndMinute(pin.endMinute);
+    setPinFormColor(pin.color);
+    setPinFormError('');
+    setPinModal({ isOpen: true, pinId: pin.id });
+  };
+
+  const handleSavePin = () => {
+    if (!pinFormName.trim()) {
+      setPinFormError('PLEASE SPECIFY PIN LABEL NAME');
+      return;
+    }
+
+    const startVal = pinFormStartHour * 60 + pinFormStartMinute;
+    const endVal = pinFormEndHour * 60 + pinFormEndMinute;
+
+    if (startVal >= endVal) {
+      setPinFormError('END TIME MUST BE GREATER THAN START TIME');
+      return;
+    }
+
+    if (pinModal.pinId) {
+      // Edit mode
+      setTimePins(prev => prev.map(p => p.id === pinModal.pinId ? {
+        ...p,
+        name: pinFormName.trim(),
+        startHour: pinFormStartHour,
+        startMinute: pinFormStartMinute,
+        endHour: pinFormEndHour,
+        endMinute: pinFormEndMinute,
+        color: pinFormColor
+      } : p));
+    } else {
+      // Create mode
+      const newPin: TimePin = {
+        id: Math.random().toString(36).substring(7),
+        name: pinFormName.trim(),
+        startHour: pinFormStartHour,
+        startMinute: pinFormStartMinute,
+        endHour: pinFormEndHour,
+        endMinute: pinFormEndMinute,
+        color: pinFormColor
+      };
+      setTimePins(prev => [...prev, newPin]);
+    }
+
+    setPinModal({ isOpen: false });
+  };
+
+  const handleDeletePin = (id: string) => {
+    setTimePins(prev => prev.filter(p => p.id !== id));
+    setPinModal({ isOpen: false });
+  };
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [deleteMode, setDeleteMode] = useState<'this' | 'following' | 'all'>('this');
@@ -241,6 +426,14 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
     };
   }, [expandedTasksForWeek, weekDays]);
 
+  const getNowYPosition = () => {
+    const hh = now.getHours();
+    const mm = now.getMinutes();
+    const baseTop = hourTops[hh] || 0;
+    const hourHeight = hourHeights[hh] || 85;
+    return baseTop + (mm / 60) * hourHeight;
+  };
+
   // Scroll to current hour on mount, adjust dynamically based on heights
   useEffect(() => {
     if (gridRef.current && hourTops.length > 0) {
@@ -292,13 +485,167 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
     <div className="flex flex-col flex-1 h-[70vh] md:h-[75vh] min-h-[500px] bg-paper relative font-sans pb-12">
       {/* Header controls matching screenshot */}
       <div className="flex justify-between items-end mb-4 pb-2 border-b-[6px] border-ink shrink-0 gap-2">
-        <h2 className="font-sans text-3xl md:text-5xl font-black uppercase tracking-tighter leading-none flex flex-col min-w-0">
+        <h2 className="font-sans text-3xl md:text-5xl font-black uppercase tracking-tighter leading-none flex flex-col min-w-0 relative">
           <span>This</span>
           <span>Week's</span>
           <span>Transit</span>
-          <span className="font-mono text-[9px] md:text-[11px] font-black tracking-widest text-[#EF4444] mt-1.5 uppercase truncate">
-            {format(weekDays[0], 'MMM dd')} — {format(weekDays[6], 'MMM dd, yyyy')}
-          </span>
+          <div className="relative inline-block mt-1.5 max-w-full">
+            <button 
+              type="button"
+              onClick={() => {
+                setPickerMonth(currentDate);
+                setIsDatePickerOpen(!isDatePickerOpen);
+              }}
+              className="flex items-center gap-1 font-mono text-[9px] md:text-[11.5px] font-black tracking-widest text-[#EF4444] uppercase hover:text-ink transition-colors cursor-pointer text-left select-none focus:outline-none"
+            >
+              <span>{format(weekDays[0], 'MMM dd')} — {format(weekDays[6], 'MMM dd, yyyy')}</span>
+              <ChevronDown size={14} className={cn("text-[#EF4444] transition-transform duration-200 shrink-0", isDatePickerOpen && "rotate-180")} strokeWidth={3} />
+            </button>
+
+            {isDatePickerOpen && (() => {
+              const year = pickerMonth.getFullYear();
+              const month = pickerMonth.getMonth();
+              const firstDayOfMonth = new Date(year, month, 1);
+              let startOffset = firstDayOfMonth.getDay() - 1;
+              if (startOffset < 0) startOffset = 6;
+              const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+              const totalDaysInPrevMonth = new Date(year, month, 0).getDate();
+              const daysArr = [];
+              for (let i = startOffset - 1; i >= 0; i--) {
+                daysArr.push({
+                  date: new Date(year, month - 1, totalDaysInPrevMonth - i),
+                  isCurrentMonth: false,
+                });
+              }
+              for (let i = 1; i <= totalDaysInMonth; i++) {
+                daysArr.push({
+                  date: new Date(year, month, i),
+                  isCurrentMonth: true,
+                });
+              }
+              const remainingSlots = 42 - daysArr.length;
+              for (let i = 1; i <= remainingSlots; i++) {
+                daysArr.push({
+                  date: new Date(year, month + 1, i),
+                  isCurrentMonth: false,
+                });
+              }
+
+              return (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40 bg-transparent cursor-default" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsDatePickerOpen(false);
+                    }} 
+                  />
+                  <div className="absolute top-full left-0 mt-3 z-50 bg-[#FFFEEF] border-[4px] border-ink shadow-[6px_6px_0px_#1A1A1B] p-4 w-[290px] md:w-[330px] select-none text-ink animate-in fade-in slide-in-from-top-2 duration-200">
+                    {/* Header Controls */}
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b-[3px] border-ink">
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPickerMonth(new Date(year, month - 1, 1));
+                        }}
+                        className="p-1 border-2 border-ink bg-paper shadow-[2px_2px_0px_#1A1A1B] active:shadow-none hover:bg-taxi active:translate-y-[1px] active:translate-x-[1px] transition-all cursor-pointer shrink-0"
+                      >
+                        <ChevronLeft size={14} strokeWidth={3} />
+                      </button>
+                      
+                      <div className="flex items-center gap-1.5 font-sans font-black uppercase text-[11px] md:text-xs tracking-widest text-ink select-none">
+                        <CalendarDays size={13} className="text-subway-red" strokeWidth={2.5} />
+                        <span>{format(pickerMonth, 'MMMM yyyy')}</span>
+                      </div>
+
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPickerMonth(new Date(year, month + 1, 1));
+                        }}
+                        className="p-1 border-2 border-ink bg-paper shadow-[2px_2px_0px_#1A1A1B] active:shadow-none hover:bg-taxi active:translate-y-[1px] active:translate-x-[1px] transition-all cursor-pointer shrink-0"
+                      >
+                        <ChevronRight size={14} strokeWidth={3} />
+                      </button>
+                    </div>
+
+                    {/* Weekday names starting with Monday */}
+                    <div className="grid grid-cols-7 text-center font-mono text-[9px] font-black uppercase tracking-wider mb-2 text-ink/75">
+                      <span>Mon</span>
+                      <span>Tue</span>
+                      <span>Wed</span>
+                      <span>Thu</span>
+                      <span>Fri</span>
+                      <span>Sat</span>
+                      <span>Sun</span>
+                    </div>
+
+                    {/* Days Grid */}
+                    <div className="grid grid-cols-7 gap-1">
+                      {daysArr.map(({ date, isCurrentMonth }, idx) => {
+                        const isSelectedWeek = date >= weekStart && date <= weekDays[6];
+                        const isToday = isSameDay(date, toIST(new Date()));
+                        const isSelectedDay = isSameDay(date, currentDate);
+
+                        return (
+                          <button
+                            key={`${date.toISOString()}-${idx}`}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCurrentDate(date);
+                              setIsDatePickerOpen(false);
+                            }}
+                            className={cn(
+                              "aspect-square flex flex-col items-center justify-center font-mono text-[10px] font-bold border transition-all cursor-pointer relative rounded-none",
+                              isCurrentMonth ? "text-ink border-ink/15 bg-paper" : "text-ink/30 border-transparent bg-transparent",
+                              isSelectedWeek && "bg-taxi/25 border-taxi/50 font-extrabold text-ink",
+                              isSelectedDay && "bg-taxi text-ink border-[3px] border-ink font-black scale-105 shadow-[2.5px_2.5px_0px_#1A1A1B] z-10",
+                              isToday && !isSelectedDay && "border-2 border-subway-red text-subway-red font-black"
+                            )}
+                          >
+                            <span>{date.getDate()}</span>
+                            {isToday && (
+                              <span className="absolute bottom-1 w-1 h-1 rounded-full bg-subway-red" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Quick Jump Options */}
+                    <div className="mt-4 pt-2.5 border-t-2 border-ink flex gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const today = toIST(new Date());
+                          setCurrentDate(today);
+                          setPickerMonth(today);
+                          setIsDatePickerOpen(false);
+                        }}
+                        className="flex-1 text-center py-1.5 border-2 border-ink bg-paper hover:bg-taxi font-mono text-[8px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[1.5px] active:translate-x-[1.5px] cursor-pointer transition-all"
+                      >
+                        GO TO TODAY
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsDatePickerOpen(false);
+                        }}
+                        className="px-3 py-1.5 border-2 border-ink bg-paper-dark hover:bg-ink hover:text-paper font-mono text-[8px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[1.5px] active:translate-x-[1.5px] cursor-pointer transition-all"
+                      >
+                        CLOSE
+                      </button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
         </h2>
         <div className="flex flex-col items-end gap-2 mb-1 shrink-0">
           <button 
@@ -323,8 +670,16 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
             {/* Week Days Header inside the scroll container to align perfectly */}
             <div className="z-30 sticky top-0 shrink-0 bg-paper border-b-[4px] border-ink">
               <div className="flex border-b border-ink/40">
-                <div className="w-10 md:w-12 border-r-[4px] border-ink flex items-center justify-center p-1 shrink-0 bg-paper sticky left-0 z-40 block-decor">
-                  <span className="font-mono text-[8px] uppercase font-bold tracking-widest leading-tight text-center">I<br/>S<br/>T</span>
+                <div className="w-14 md:w-16 border-r-[4px] border-ink flex flex-col items-center justify-center py-1 md:py-2 px-1 shrink-0 bg-paper sticky left-0 z-40 block-decor">
+                  <span className="font-mono text-[8px] uppercase font-bold tracking-widest leading-none text-center">IST</span>
+                  <button 
+                    type="button" 
+                    onClick={() => handleOpenCreatePin()}
+                    className="mt-1 px-1 py-0.5 border-2 border-ink font-mono text-[5.5px] md:text-[7px] uppercase font-black bg-taxi hover:bg-taxi/90 text-ink shadow-[1.1px_1.1px_0px_#1A1A1B] hover:translate-y-[-0.5px] active:shadow-none active:translate-x-[0.5px] active:translate-y-[0.5px] transition-all select-none cursor-pointer leading-none shrink-0"
+                    title="Anchor a new time section pin"
+                  >
+                    + PIN
+                  </button>
                 </div>
                 <div className="flex-1 grid grid-cols-7">
                   {weekDays.map((day, dayIndex) => {
@@ -381,7 +736,7 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
               {/* Multi-day / All-day Tasks spanning multiple days */}
               {multiDayTasksForWeek.length > 0 && (
                 <div className="flex bg-paper-dark border-t border-ink shrink-0 relative">
-                  <div className="w-10 md:w-12 border-r-[4px] border-ink flex flex-col items-center justify-center p-1 shrink-0 bg-paper sticky left-0 z-40">
+                  <div className="w-14 md:w-16 border-r-[4px] border-ink flex flex-col items-center justify-center p-1 shrink-0 bg-paper sticky left-0 z-40">
                     <span className="font-mono text-[7px] uppercase font-black text-ink/50 tracking-wider text-center leading-none">SPAN</span>
                   </div>
                   <div className="flex-1 relative py-1 min-h-[36px] bg-paper/30 flex flex-col justify-center">
@@ -455,25 +810,220 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
 
             <div className="flex relative pb-20">
               
-              {/* Time Labels Rail */}
+              {/* Time Labels Rail with integrated Custom Pins & Side Sections on the left */}
               <div 
-                className="w-10 md:w-12 shrink-0 border-r-[4px] border-ink bg-paper sticky left-0 z-20"
+                className="w-14 md:w-16 shrink-0 border-r-[4px] border-ink bg-[#FAF8F2] sticky left-0 z-20 group/timerail relative"
                 style={{ height: `${totalGridHeight}px` }}
               >
-                {hours.map(hour => (
-                  <div 
-                    key={hour} 
-                    className="border-b-2 border-dashed border-ink/20 flex justify-center relative bg-paper"
-                    style={{ height: `${hourHeights[hour]}px` }}
-                  >
-                    <span className={cn(
-                      "absolute top-1 font-mono text-[8.5px] md:text-[10px] font-black uppercase tracking-tighter bg-paper px-1 z-10 leading-none transition-all",
-                      hourHeights[hour] === 30 ? "text-ink/30 scale-[0.8] origin-top" : "text-ink/70"
-                    )}>
-                      {format(toIST(new Date()).setHours(hour, 0, 0, 0), 'ha')}
-                    </span>
-                  </div>
-                ))}
+                {/* Clickable slot on each hour to anchor a pin */}
+                <div className="absolute inset-0 flex flex-col pointer-events-auto z-10">
+                  {hours.map(hour => (
+                    <div
+                      key={hour}
+                      onClick={() => handleOpenCreatePin(hour)}
+                      className="w-full hover:bg-black/5 cursor-pointer border-b border-dashed border-ink/5 flex items-end justify-start p-1 transition-all group/timehour"
+                      style={{ height: `${hourHeights[hour]}px` }}
+                      title={`Click here to anchor section starting at ${hour}:00`}
+                    >
+                      <span className="font-mono text-[5px] md:text-[6px] font-black text-ink/30 opacity-0 group-hover/timehour:opacity-100 transition-opacity uppercase tracking-tighter leading-none select-none pl-3 pb-1">
+                        + PIN
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Drawn Section side indicators & Pins inside Time Labels Rail */}
+                {timePins.map((pin, idx) => {
+                  const startBaseTop = hourTops[pin.startHour] || 0;
+                  const startHourHeight = hourHeights[pin.startHour] || 85;
+                  const startTop = startBaseTop + (pin.startMinute / 60) * startHourHeight;
+
+                  const endBaseTop = hourTops[pin.endHour] || 0;
+                  const endHourHeight = hourHeights[pin.endHour] || 85;
+                  const endTop = endBaseTop + (pin.endMinute / 60) * endHourHeight;
+                  const height = Math.max(12, endTop - startTop);
+
+                  const overlapOffset = (idx % 2) * 5; // shift tiny bit to right if overlapping
+
+                  return (
+                    <div key={`rail-pin-${pin.id}`} className="absolute top-0 bottom-0 left-0 right-0 pointer-events-none" style={{ zIndex: 30 }}>
+                      {/* Vertical highlight strip on leftmost part of time rail */}
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActivePopoverPinId(activePopoverPinId === pin.id ? null : pin.id);
+                        }}
+                        className="absolute w-[5px] md:w-[7px] rounded-full border border-ink cursor-pointer hover:w-[10px] transition-all pointer-events-auto group/pinstrip shadow-[1px_1px_px_rgba(0,0,0,0.15)]"
+                        style={{
+                          top: `${startTop}px`,
+                          height: `${height}px`,
+                          left: `${2 + overlapOffset}px`,
+                          backgroundColor: pin.color,
+                        }}
+                        title={`${pin.name} (${formatIndianTime(pin.startHour, pin.startMinute)} - ${formatIndianTime(pin.endHour, pin.endMinute)})`}
+                      >
+                        {/* Interactive Click Popover Card holding premium journal theme details shown in the screenshot */}
+                        {activePopoverPinId === pin.id && (
+                          <div 
+                            onClick={(e) => {
+                              // Prevent closing the popover when clicking inside it
+                              e.stopPropagation();
+                            }}
+                            className="absolute left-[12px] top-1/2 -translate-y-1/2 bg-[#FCFAF2] border-[3px] border-ink p-3 shadow-[4px_4px_0px_#1A1A1B] w-52 md:w-56 z-[999] pointer-events-auto rounded-lg text-left"
+                          >
+                            <p className="font-mono text-[8px] font-bold uppercase text-ink/50 tracking-widest leading-none mb-1">Time Section</p>
+                            <p className="font-sans font-black text-[12px] md:text-[14px] text-ink uppercase tracking-tight leading-snug mb-1">
+                              {pin.name}
+                            </p>
+                            <div className="flex items-center gap-1.5 font-mono text-[9px] md:text-[10px] font-bold text-ink/75">
+                              <Clock size={12} strokeWidth={2.5} className="text-ink/65 shrink-0" />
+                              <span>
+                                {formatIndianTime(pin.startHour, pin.startMinute)} - {formatIndianTime(pin.endHour, pin.endMinute)}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditPin(pin);
+                                setActivePopoverPinId(null);
+                              }}
+                              className="w-full mt-3 py-1.5 px-3 border-[2.5px] border-ink font-mono text-[8.5px] md:text-[10px] font-black uppercase text-center bg-taxi hover:bg-taxi/90 text-ink shadow-[2.5px_2.5px_0px_#1A1A1B] hover:translate-y-[-0.5px] active:shadow-none active:translate-x-[0.5px] active:translate-y-[0.5px] transition-all cursor-pointer rounded-md select-none tracking-widest leading-none block"
+                            >
+                              CLICK TO EDIT
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Start Pin - points horizontally */}
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEditPin(pin);
+                        }}
+                        className="absolute cursor-pointer pointer-events-auto hover:scale-110 active:scale-95 transition-transform"
+                        style={{
+                          top: `${startTop - 9}px`, // center pin
+                          left: `${overlapOffset - 1.5}px`
+                        }}
+                        title={`Start marker: ${pin.name}`}
+                      >
+                        <SketchPushPin color={pin.color} size={18} horizontal={true} />
+                      </div>
+
+                      {/* End Pin - points horizontally */}
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEditPin(pin);
+                        }}
+                        className="absolute cursor-pointer pointer-events-auto hover:scale-110 active:scale-95 transition-transform"
+                        style={{
+                          top: `${endTop - 9}px`, // center pin
+                          left: `${overlapOffset - 1.5}px`
+                        }}
+                        title={`End marker: ${pin.name}`}
+                      >
+                        <SketchPushPin color={pin.color} size={18} horizontal={true} />
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Normal Time Labels */}
+                <div className="absolute inset-0 pointer-events-none z-0">
+                  {hours.map(hour => (
+                    <div 
+                      key={hour} 
+                      className="border-b-2 border-dashed border-ink/20 flex justify-end items-start pr-1 relative"
+                      style={{ height: `${hourHeights[hour]}px` }}
+                    >
+                      <span className={cn(
+                        "font-mono text-[8px] md:text-[9.5px] font-black uppercase tracking-tighter bg-transparent px-1 mt-1 z-10 leading-none transition-all mr-1",
+                        hourHeights[hour] === 30 ? "text-ink/30 scale-[0.8] origin-right" : "text-ink/60"
+                      )}>
+                        {format(toIST(new Date()).setHours(hour, 0, 0, 0), 'ha')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Overlay Horizontal Pin Lines spanning across the entire width of week columns */}
+              <div className="absolute inset-y-0 left-[56px] md:left-[64px] right-0 pointer-events-none z-10 overflow-hidden">
+                {(() => {
+                  const lines: Array<{
+                    id: string;
+                    top: number;
+                    color: string;
+                    pin: TimePin;
+                    type: 'start' | 'end';
+                  }> = [];
+
+                  timePins.forEach(pin => {
+                    const baseTop = hourTops[pin.startHour] || 0;
+                    const startHourHeight = hourHeights[pin.startHour] || 85;
+                    const startTop = baseTop + (pin.startMinute / 60) * startHourHeight;
+
+                    const endBaseTop = hourTops[pin.endHour] || 0;
+                    const endHourHeight = hourHeights[pin.endHour] || 85;
+                    const endTop = endBaseTop + (pin.endMinute / 60) * endHourHeight;
+
+                    lines.push({
+                      id: `${pin.id}-start`,
+                      top: startTop,
+                      color: pin.color,
+                      pin,
+                      type: 'start'
+                    });
+
+                    lines.push({
+                      id: `${pin.id}-end`,
+                      top: endTop,
+                      color: pin.color,
+                      pin,
+                      type: 'end'
+                    });
+                  });
+
+                  const groups: Array<Array<{
+                    id: string;
+                    top: number;
+                    color: string;
+                    pin: TimePin;
+                    type: 'start' | 'end';
+                  }>> = [];
+
+                  lines.forEach(line => {
+                    const matchedGroup = groups.find(g => Math.abs(g[0].top - line.top) <= 2);
+                    if (matchedGroup) {
+                      matchedGroup.push(line);
+                    } else {
+                      groups.push([line]);
+                    }
+                  });
+
+                  return groups.flatMap(group => {
+                    return group.map((line, index) => {
+                      const offset = (index - (group.length - 1) / 2) * 4;
+                      const adjustedTop = line.top + offset;
+
+                      return (
+                        <div 
+                          key={line.id}
+                          className="absolute left-0 right-0 border-t-2 border-dashed flex items-center transition-all animate-fade-in"
+                          style={{ 
+                            top: `${adjustedTop}px`, 
+                            borderColor: line.color,
+                            filter: 'drop-shadow(1px 1px 0px rgba(0,0,0,0.15))',
+                            zIndex: 10 + index,
+                          }}
+                        />
+                      );
+                    });
+                  });
+                })()}
               </div>
 
               {/* Grid Columns */}
@@ -537,6 +1087,11 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                           width: `${layout.width}%`,
                         } : getEventStyle(task);
 
+                        const cardHeight = layout ? layout.height : (getEventStyle(task).height || 85);
+                        const isVerySmall = cardHeight < 36;
+                        const isMediumSmall = cardHeight >= 36 && cardHeight < 62;
+                        const isTaller = cardHeight >= 62;
+
                         return (
                           <div 
                             key={task.id}
@@ -545,66 +1100,135 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                               setSelectedTask(task);
                             }}
                             className={cn(
-                              "absolute z-10 border-[3px] p-1.5 overflow-hidden shadow-[2px_2px_0px_#1A1A1B] cursor-pointer hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_#1A1A1B] transition-all select-none",
+                              "absolute z-10 border-[3px] overflow-hidden shadow-[2px_2px_0px_#1A1A1B] cursor-pointer hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_#1A1A1B] transition-all select-none",
+                              isVerySmall ? "p-0.5" : isMediumSmall ? "p-1" : "p-1.5",
                               getEventColor(task)
                             )}
                             style={style}
                           >
-                          {/* Priority Indicator Line on Left Side */}
-                          <div className={cn(
-                            "absolute left-0 top-0 bottom-0 w-1",
-                            task.status === 'done' ? "bg-ink/10" : (task.priority === 'urgent' ? "bg-subway-red" : task.priority === 'medium' ? "bg-taxi" : "bg-ink/30")
-                          )} />
+                            {/* Priority Indicator Line on Left Side */}
+                            <div className={cn(
+                              "absolute left-0 top-0 bottom-0 w-1",
+                              task.status === 'done' ? "bg-ink/10" : (task.priority === 'urgent' ? "bg-subway-red" : task.priority === 'medium' ? "bg-taxi" : "bg-ink/30")
+                            )} />
 
-                          <div className="flex flex-col h-full justify-between pl-1 pb-0.5">
-                            {/* Card Tag & Priority Header */}
-                            <div className="flex items-center justify-between gap-1 select-none">
-                              <span className={cn(
-                                "font-mono text-[6px] md:text-[7.5px] font-extrabold uppercase px-1 border border-ink/20 scale-90 origin-left shrink-0",
-                                task.status === 'done' ? "bg-transparent text-ink/30 border-ink/10" : (task.priority === 'urgent' && "bg-subway-red/10 text-subway-red border-subway-red/30")
-                              )}>
-                                {task.priority === 'urgent' ? 'P1 Urgent' : task.priority === 'medium' ? 'P2 Med' : 'P3 Low'}
-                              </span>
-                              {task.tags && task.tags.length > 0 && (
-                                <span className={cn(
-                                  "hidden sm:inline font-mono text-[6px] md:text-[7.5px] font-semibold uppercase border px-0.5 truncate scale-90 origin-right",
-                                  task.status === 'done' ? "text-ink/30 bg-transparent border-ink/10" : "text-ink/60 bg-paper-dark border-ink/20"
-                                )}>
-                                  {task.tags[0]}
-                                </span>
+                            <div className={cn(
+                              "flex flex-col h-full pl-1",
+                              isVerySmall ? "justify-center" : "justify-between py-0.5 pb-0.5"
+                            )}>
+                              {isVerySmall ? (
+                                <div className="flex items-center justify-between gap-1 w-full text-[7px] md:text-[8px] font-black uppercase text-ink leading-none">
+                                  <span className="truncate pr-1">
+                                    {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
+                                    {task.title}
+                                  </span>
+                                  {task.title.length < 10 && task.deadline && (
+                                    <span className="font-mono text-[6px] md:text-[7px] font-extrabold opacity-60 shrink-0">
+                                      {format(new Date(task.deadline), 'H:mm')}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : isMediumSmall ? (
+                                <>
+                                  {/* Title */}
+                                  <div className={cn(
+                                    "font-sans font-black uppercase tracking-tight leading-none",
+                                    cardHeight < 48 ? "text-[8px] md:text-[8.5px] line-clamp-1" : "text-[8.5px] md:text-[9.5px] line-clamp-2",
+                                    task.status === 'done' ? "line-through text-ink/40" : "text-ink"
+                                  )}>
+                                    {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
+                                    {task.title}
+                                  </div>
+
+                                  {/* Compact Meta row showing Priority & Duration since space is available */}
+                                  <div className="flex items-center gap-1 flex-wrap text-ink font-mono text-[6.5px] md:text-[7.5px] font-bold leading-none opacity-90 select-none overflow-hidden h-3.5 md:h-4 mt-0.5">
+                                    <span className={cn(
+                                      "px-1 border border-ink/15 scale-90 origin-left shrink-0 rounded-[1.5px] tracking-wide",
+                                      task.status === 'done' ? "bg-transparent text-ink/30 border-ink/10" : 
+                                      task.priority === 'urgent' ? "bg-subway-red/15 text-subway-red border-subway-red/25" :
+                                      task.priority === 'medium' ? "bg-taxi/20 text-ink border-taxi/40" : "bg-ink/5 text-ink/65 border-ink/15"
+                                    )}>
+                                      {task.priority === 'urgent' ? 'P1' : task.priority === 'medium' ? 'P2' : 'P3'}
+                                    </span>
+                                    {task.deadline && (
+                                      <span className="flex items-center gap-0.5 text-ink/75 shrink-0 scale-95 origin-left truncate max-w-[70%]">
+                                        <Clock size={7} className="shrink-0" strokeWidth={3} />
+                                        {formatTaskTimeRange(task)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  {/* Card Tag & Priority Header (For Taller Cards) */}
+                                  <div className="flex items-center justify-between gap-1 select-none">
+                                    <span className={cn(
+                                      "font-mono text-[6px] md:text-[7.5px] font-extrabold uppercase px-1 border border-ink/20 scale-90 origin-left shrink-0",
+                                      task.status === 'done' ? "bg-transparent text-ink/30 border-ink/10" : (task.priority === 'urgent' && "bg-subway-red/10 text-subway-red border-subway-red/30")
+                                    )}>
+                                      {task.priority === 'urgent' ? 'P1 Urgent' : task.priority === 'medium' ? 'P2 Med' : 'P3 Low'}
+                                    </span>
+                                    {task.tags && task.tags.length > 0 && (
+                                      <span className={cn(
+                                        "hidden sm:inline font-mono text-[6px] md:text-[7.5px] font-semibold uppercase border px-0.5 truncate scale-90 origin-right",
+                                        task.status === 'done' ? "text-ink/30 bg-transparent border-ink/10" : "text-ink/60 bg-paper-dark border-ink/20"
+                                      )}>
+                                        {task.tags[0]}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Title */}
+                                  <div className={cn(
+                                    "font-sans font-black uppercase tracking-tight leading-tight text-[9px] md:text-[11px] line-clamp-2 mt-0.5",
+                                    task.status === 'done' ? "line-through text-ink/40" : "text-ink"
+                                  )}>
+                                    {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
+                                    {task.title}
+                                  </div>
+
+                                  {/* Time & Checklist stamp (For Taller Cards) */}
+                                  <div className="font-mono text-[7px] md:text-[8px] font-bold opacity-80 mt-0.5 flex items-center justify-between">
+                                    <span className="flex items-center gap-0.5">
+                                      <Clock size={8} className="shrink-0" />
+                                      {formatTaskTimeRange(task)}
+                                    </span>
+                                    <div className="flex items-center gap-1 shrink-0 select-none">
+                                      {task.status === 'done' && (
+                                        <span className="text-green-700 font-extrabold text-[8px] md:text-[10px] leading-none">✓</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </>
                               )}
                             </div>
+                          </div>
+                      );})}
 
-                            {/* Title */}
-                            <div className={cn(
-                              "font-sans font-black uppercase text-[9px] md:text-[11px] leading-tight line-clamp-2 mt-0.5 tracking-tight",
-                              task.status === 'done' ? "line-through text-ink/40" : "text-ink"
-                            )}>
-                              {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
-                              {task.title}
-                            </div>
-
-                            {/* Time & Checklist stamp */}
-                            <div className="font-mono text-[7px] md:text-[8px] font-bold opacity-80 mt-0.5 flex items-center justify-between">
-                              <span className="flex items-center gap-0.5">
-                                <Clock size={8} className="shrink-0" />
-                                {task.deadline ? (
-                                  task.endTime ? (
-                                    `${format(new Date(task.deadline), 'H:mm')} - ${format(new Date(task.endTime), 'H:mm')}`
-                                  ) : (
-                                    format(new Date(task.deadline), 'h:mm a')
-                                  )
-                                ) : 'ANY'}
-                              </span>
-                              <div className="flex items-center gap-1 shrink-0 select-none">
-                                {task.status === 'done' && (
-                                  <span className="text-green-700 font-extrabold text-[8px] md:text-[10px] leading-none">✓</span>
-                                )}
+                      {/* Real-time Current Position indicator line & badges */}
+                      {(() => {
+                        const isToday = isSameDay(day, now);
+                        return isToday && (
+                          <div 
+                            className="absolute left-0 right-0 z-30 pointer-events-none flex items-center"
+                            style={{ top: `${getNowYPosition()}px`, transform: 'translateY(-50%)' }}
+                          >
+                            <div className="w-full relative flex items-center">
+                              {/* Sleek retro high-contrast time horizontal thread line */}
+                              <div className="absolute inset-x-0 h-[3.5px] bg-ink" />
+                              <div className="absolute inset-x-0 h-[1.5px] bg-subway-red" />
+                              
+                              {/* Circle node bead matching transit theme */}
+                              <div className="absolute -left-[9px] flex items-center z-40 select-none">
+                                {/* The perfect transit station node circle */}
+                                <div className="w-[18px] h-[18px] rounded-full bg-paper border-[3px] border-ink flex items-center justify-center shadow-[1.5px_1.5px_0px_#1A1A1B] shrink-0">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-subway-red" />
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      );})}
+                        );
+                      })()}
                     </div>
                   );
                 })}
@@ -980,6 +1604,352 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
       )}
 
       {/* Birthdays Manager Modal was removed because it is now rendered globally at the app root level */}
+
+      {/* TIME PINS (SECTIONS OF THE DAY) DIALOG MODAL */}
+      {pinModal.isOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 select-none">
+          <div 
+            className="absolute inset-0 bg-ink/75 backdrop-blur-sm" 
+            onClick={() => setPinModal({ isOpen: false })}
+          />
+          
+          <div className="relative w-full max-w-sm bg-paper border-[6px] border-ink shadow-[8px_8px_0px_#1A1A1B] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="bg-ink text-paper p-4 flex justify-between items-center border-b-[6px] border-taxi shrink-0">
+              <div className="flex items-center gap-2">
+                <SketchPushPin color={pinFormColor} size={28} />
+                <div className="text-left">
+                  <span className="font-mono text-[9px] font-black uppercase text-taxi tracking-widest leading-none block">
+                    CHRONOLOGY PIN
+                  </span>
+                  <h3 className="font-sans font-black text-lg uppercase tracking-tight leading-none mt-1">
+                    {pinModal.pinId ? 'MODIFY SECTION' : 'ANCHOR SECTION'}
+                  </h3>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setPinModal({ isOpen: false })} 
+                className="text-paper hover:text-taxi transition-colors text-xl font-bold cursor-pointer"
+              >
+                <X size={20} strokeWidth={3} />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <div className="p-5 space-y-4 overflow-y-auto">
+              
+              {/* Error banner */}
+              {pinFormError && (
+                <div className="bg-[#EF4444]/15 border-2 border-dashed border-[#EF4444] p-2.5 text-center font-mono text-[9px] font-black text-[#EF4444] uppercase tracking-wider rounded">
+                  ⚠ {pinFormError}
+                </div>
+              )}
+
+              {/* Input: Name */}
+              <div className="space-y-1 block text-left">
+                <label className="font-mono text-[10px] font-black uppercase tracking-widest opacity-60 block">Section Name / Label</label>
+                <input
+                  type="text"
+                  maxLength={40}
+                  placeholder="E.G., MORNING ROUTINE, SHIFT A..."
+                  value={pinFormName}
+                  onChange={(e) => setPinFormName(e.target.value)}
+                  className="w-full bg-paper-dark border-[3px] border-ink p-2 font-mono text-xs font-black uppercase focus:outline-none focus:bg-paper"
+                />
+              </div>
+
+              {/* Time inputs: Start and End */}
+              {(() => {
+                const start12 = to12HourFrom24(pinFormStartHour);
+                const end12 = to12HourFrom24(pinFormEndHour);
+
+                return (
+                  <div className="space-y-4">
+                    {/* Start Time Section */}
+                    <div className="space-y-1 block text-left">
+                      <div className="flex justify-between items-center">
+                        <label className="font-mono text-[10px] font-black uppercase tracking-widest opacity-65 block">Start Time (IST)</label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        {/* Hour and Minute Grid */}
+                        <div className="flex gap-1.5">
+                          {/* Hour custom Styled select */}
+                          <div className="relative flex-1">
+                            <select
+                              value={start12.hour12}
+                              onChange={(e) => {
+                                const newHour12 = Number(e.target.value);
+                                const new24 = to24HourFrom12(newHour12, start12.ampm);
+                                setPinFormStartHour(new24);
+                              }}
+                              className="w-full bg-paper border-[3px] border-ink p-2 font-mono text-xs font-black shadow-[2px_2px_0px_#1A1A1B] hover:bg-paper-dark focus:outline-none focus:bg-paper cursor-pointer rounded-none appearance-none"
+                              style={{ backgroundImage: `url("data:image/svg+xml;utf8,<svg fill='black' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>")`, backgroundPosition: 'right 8px center', backgroundRepeat: 'no-repeat', backgroundSize: '16px', paddingRight: '28px' }}
+                            >
+                              {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(h => (
+                                <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Minutes custom Styled select */}
+                          <div className="relative w-20">
+                            <select
+                              value={pinFormStartMinute}
+                              onChange={(e) => setPinFormStartMinute(Number(e.target.value))}
+                              className="w-full bg-paper border-[3px] border-ink p-2 font-mono text-xs font-black shadow-[2px_2px_0px_#1A1A1B] hover:bg-paper-dark focus:outline-none focus:bg-paper cursor-pointer rounded-none appearance-none"
+                              style={{ backgroundImage: `url("data:image/svg+xml;utf8,<svg fill='black' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>")`, backgroundPosition: 'right 6px center', backgroundRepeat: 'no-repeat', backgroundSize: '14px', paddingRight: '22px' }}
+                            >
+                              {Array.from({ length: 12 }).map((_, i) => {
+                                const m = i * 5;
+                                return (
+                                  <option key={m} value={m}>:{String(m).padStart(2, '0')}</option>
+                                );
+                              })}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* AM / PM Segmented selector */}
+                        <div className="flex border-[3px] border-ink divide-x-[3px] divide-ink shadow-[2px_2px_0px_#1A1A1B] rounded-none overflow-hidden h-[38px]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const new24 = to24HourFrom12(start12.hour12, 'AM');
+                              setPinFormStartHour(new24);
+                            }}
+                            className={cn(
+                              "flex-1 font-mono text-[10px] md:text-xs font-black cursor-pointer transition-colors focus:outline-none",
+                              start12.ampm === 'AM' ? "bg-taxi text-ink" : "bg-paper text-ink/40 hover:bg-paper-dark"
+                            )}
+                          >
+                            AM
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const new24 = to24HourFrom12(start12.hour12, 'PM');
+                              setPinFormStartHour(new24);
+                            }}
+                            className={cn(
+                              "flex-1 font-mono text-[10px] md:text-xs font-black cursor-pointer transition-colors focus:outline-none",
+                              start12.ampm === 'PM' ? "bg-taxi text-ink" : "bg-paper text-ink/40 hover:bg-paper-dark"
+                            )}
+                          >
+                            PM
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* End Time Section */}
+                    <div className="space-y-1 block text-left">
+                      <div className="flex justify-between items-center">
+                        <label className="font-mono text-[10px] font-black uppercase tracking-widest opacity-65 block">End Time (IST)</label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        {/* Hour and Minute Grid */}
+                        <div className="flex gap-1.5">
+                          {/* Hour custom Styled select */}
+                          <div className="relative flex-1">
+                            <select
+                              value={end12.hour12}
+                              onChange={(e) => {
+                                const newHour12 = Number(e.target.value);
+                                const new24 = to24HourFrom12(newHour12, end12.ampm);
+                                setPinFormEndHour(new24);
+                              }}
+                              className="w-full bg-paper border-[3px] border-ink p-2 font-mono text-xs font-black shadow-[2px_2px_0px_#1A1A1B] hover:bg-paper-dark focus:outline-none focus:bg-paper cursor-pointer rounded-none appearance-none"
+                              style={{ backgroundImage: `url("data:image/svg+xml;utf8,<svg fill='black' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>")`, backgroundPosition: 'right 8px center', backgroundRepeat: 'no-repeat', backgroundSize: '16px', paddingRight: '28px' }}
+                            >
+                              {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(h => (
+                                <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Minutes custom Styled select */}
+                          <div className="relative w-20">
+                            <select
+                              value={pinFormEndMinute}
+                              onChange={(e) => setPinFormEndMinute(Number(e.target.value))}
+                              className="w-full bg-paper border-[3px] border-ink p-2 font-mono text-xs font-black shadow-[2px_2px_0px_#1A1A1B] hover:bg-paper-dark focus:outline-none focus:bg-paper cursor-pointer rounded-none appearance-none"
+                              style={{ backgroundImage: `url("data:image/svg+xml;utf8,<svg fill='black' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>")`, backgroundPosition: 'right 6px center', backgroundRepeat: 'no-repeat', backgroundSize: '14px', paddingRight: '22px' }}
+                            >
+                              {Array.from({ length: 12 }).map((_, i) => {
+                                const m = i * 5;
+                                return (
+                                  <option key={m} value={m}>:{String(m).padStart(2, '0')}</option>
+                                );
+                              })}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* AM / PM Segmented selector */}
+                        <div className="flex border-[3px] border-ink divide-x-[3px] divide-ink shadow-[2px_2px_0px_#1A1A1B] rounded-none overflow-hidden h-[38px]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const new24 = to24HourFrom12(end12.hour12, 'AM');
+                              setPinFormEndHour(new24);
+                            }}
+                            className={cn(
+                              "flex-1 font-mono text-[10px] md:text-xs font-black cursor-pointer transition-colors focus:outline-none",
+                              end12.ampm === 'AM' ? "bg-taxi text-ink" : "bg-paper text-ink/40 hover:bg-paper-dark"
+                            )}
+                          >
+                            AM
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const new24 = to24HourFrom12(end12.hour12, 'PM');
+                              setPinFormEndHour(new24);
+                            }}
+                            className={cn(
+                              "flex-1 font-mono text-[10px] md:text-xs font-black cursor-pointer transition-colors focus:outline-none",
+                              end12.ampm === 'PM' ? "bg-taxi text-ink" : "bg-paper text-ink/40 hover:bg-paper-dark"
+                            )}
+                          >
+                            PM
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Color Selector */}
+              <div className="space-y-1.5 block text-left">
+                <label className="font-mono text-[10px] font-black uppercase tracking-widest opacity-60 block">Emblem Colorway</label>
+                <div className="grid grid-cols-8 gap-1.5 pt-1">
+                  {[
+                    { hex: '#F7C331', name: 'TAXI YELLOW' },
+                    { hex: '#EF4444', name: 'REDLINE EXPRESS' },
+                    { hex: '#3B82F6', name: 'SUBWAY BLUE' },
+                    { hex: '#10B981', name: 'TUNNEL GREEN' },
+                    { hex: '#F97316', name: 'TANGERINE LINE' },
+                    { hex: '#8B5CF6', name: 'TROLLEY PURPLE' },
+                    { hex: '#EC4899', name: 'DOWNTOWN PINK' },
+                    { hex: '#14B8A6', name: 'TEAL TERMINAL' },
+                    { hex: '#06B6D4', name: 'OCEAN OVERPASS' },
+                    { hex: '#22C55E', name: 'FOREST CANOPY' },
+                    { hex: '#84CC16', name: 'LIME TRAJECTORY' },
+                    { hex: '#F59E0B', name: 'STEEL GOLD' },
+                    { hex: '#64748B', name: 'INDUSTRIAL SLATE' },
+                    { hex: '#6366F1', name: 'INDIGO RUN' },
+                    { hex: '#D946EF', name: 'FUCHSIA DEPOT' },
+                    { hex: '#F43F5E', name: 'CHERRY JUNCTION' },
+                  ].map((colorOpt) => (
+                    <button
+                      key={colorOpt.hex}
+                      type="button"
+                      onClick={() => setPinFormColor(colorOpt.hex)}
+                      className={cn(
+                        "aspect-square w-full rounded-sm border-2 border-ink shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:scale-105 active:scale-95 transition-all relative cursor-pointer block",
+                        pinFormColor === colorOpt.hex ? "ring-2 ring-offset-1 ring-ink scale-110 border-ink font-bold" : ""
+                      )}
+                      style={{ backgroundColor: colorOpt.hex }}
+                      title={colorOpt.name}
+                    >
+                      {pinFormColor === colorOpt.hex && (
+                        <span className="absolute inset-0 flex items-center justify-center font-sans text-[10px] font-black text-ink select-none" style={{ filter: 'drop-shadow(0.5px 0.5px 1px white)' }}>
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="font-mono text-[8 rounded] text-[8.5px] font-black uppercase tracking-wide flex items-center gap-1.5">
+                  <span className="opacity-60">SELECTED:</span>
+                  <span style={{ color: pinFormColor }} className="font-extrabold filter brightness-90">
+                    {
+                      [
+                        { hex: '#F7C331', name: 'TAXI YELLOW' },
+                        { hex: '#EF4444', name: 'REDLINE EXPRESS' },
+                        { hex: '#3B82F6', name: 'SUBWAY BLUE' },
+                        { hex: '#10B981', name: 'TUNNEL GREEN' },
+                        { hex: '#F97316', name: 'TANGERINE LINE' },
+                        { hex: '#8B5CF6', name: 'TROLLEY PURPLE' },
+                        { hex: '#EC4899', name: 'DOWNTOWN PINK' },
+                        { hex: '#14B8A6', name: 'TEAL TERMINAL' },
+                        { hex: '#06B6D4', name: 'OCEAN OVERPASS' },
+                        { hex: '#22C55E', name: 'FOREST CANOPY' },
+                        { hex: '#84CC16', name: 'LIME TRAJECTORY' },
+                        { hex: '#F59E0B', name: 'STEEL GOLD' },
+                        { hex: '#64748B', name: 'INDUSTRIAL SLATE' },
+                        { hex: '#6366F1', name: 'INDIGO RUN' },
+                        { hex: '#D946EF', name: 'FUCHSIA DEPOT' },
+                        { hex: '#F43F5E', name: 'CHERRY JUNCTION' },
+                      ].find(c => c.hex === pinFormColor)?.name || 'MATCHING TRANSIT COLOR'
+                    }
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer / Actions */}
+            <div className="p-4 bg-paper-dark border-t-4 border-ink flex items-center justify-between gap-3 shrink-0">
+              {pinModal.pinId ? (
+                isConfirmingPinDelete ? (
+                  <div className="flex gap-1.5 items-center">
+                    <span className="font-mono text-[9px] font-black text-[#EF4444] animate-pulse mr-1">SURE?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleDeletePin(pinModal.pinId!);
+                        setIsConfirmingPinDelete(false);
+                      }}
+                      className="px-2.5 py-1.5 bg-[#EF4444] text-white border-2 border-ink font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B] active:shadow-none active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer"
+                    >
+                      YES
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmingPinDelete(false)}
+                      className="px-2.5 py-1.5 bg-paper text-ink border-2 border-ink font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B] active:shadow-none active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer"
+                    >
+                      NO
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmingPinDelete(true)}
+                    className="px-3 py-2 bg-[#EF4444] text-white border-2 border-ink font-mono text-[9px] font-black uppercase shadow-[2px_2px_0px_#1A1A1B] active:shadow-none active:translate-x-[1px] active:translate-y-[1px] transition-all hover:bg-[#DC2626] cursor-pointer"
+                  >
+                    DELETE PIN
+                  </button>
+                )
+              ) : (
+                <div />
+              )}
+              
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPinModal({ isOpen: false })}
+                  className="px-3 py-2 bg-paper border-2 border-ink font-mono text-[9px] font-black uppercase shadow-[2px_2px_0px_#1A1A1B] active:shadow-none active:translate-x-[1px] active:translate-y-[1px] transition-all hover:bg-paper-dark cursor-pointer"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSavePin}
+                  className="px-4 py-2 bg-taxi hover:bg-taxi/90 border-2 border-ink text-ink font-mono text-[9px] font-black uppercase shadow-[2px_2px_0px_#1A1A1B] active:shadow-none active:translate-x-[1px] active:translate-y-[1px] transition-all cursor-pointer"
+                >
+                  SAVE ANCHOR
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
