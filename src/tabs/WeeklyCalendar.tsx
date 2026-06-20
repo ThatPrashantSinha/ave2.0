@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, getHours, getMinutes, addHours } from 'date-fns';
 import { Task, Birthday, Habit } from '../types';
 import { cn, toIST } from '../lib/utils';
-import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit, Gift, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit, Gift, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Zap, Milestone, Gauge, Activity, Timer } from 'lucide-react';
 import { AnalogClockPicker } from '../components/AnalogClockPicker';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { SketchPushPin } from '../components/SketchPushPin';
@@ -493,6 +493,59 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
     return 'bg-paper text-ink border-ink';
   };
 
+  const formatPinTime = (hour: number, minute: number) => {
+    const h = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const ampm = hour >= 12 ? 'pm' : 'am';
+    const m = minute < 10 ? `0${minute}` : minute;
+    return `${h}:${m}${ampm}`;
+  };
+
+  // Chronologically sorted pins for visual representation
+  const sortedPins = [...timePins].sort((a, b) => (a.startHour * 60 + a.startMinute) - (b.startHour * 60 + b.startMinute));
+  
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const nowTotalMins = currentHour * 60 + currentMinute;
+
+  const currentPin = sortedPins.find(pin => {
+    const startMins = pin.startHour * 60 + pin.startMinute;
+    const endMins = pin.endHour * 60 + pin.endMinute;
+    return nowTotalMins >= startMins && nowTotalMins < endMins;
+  });
+
+  // Calculate next pin and time to it
+  let nextPin: TimePin | null = null;
+  let minsToNextPin = 0;
+
+  if (!currentPin) {
+    const upcoming = sortedPins.find(pin => {
+      const startMins = pin.startHour * 60 + pin.startMinute;
+      return startMins > nowTotalMins;
+    });
+    if (upcoming) {
+      nextPin = upcoming;
+      minsToNextPin = (upcoming.startHour * 60 + upcoming.startMinute) - nowTotalMins;
+    } else if (sortedPins.length > 0) {
+      nextPin = sortedPins[0];
+      minsToNextPin = (1440 - nowTotalMins) + (nextPin.startHour * 60 + nextPin.startMinute);
+    }
+  }
+
+  // Elapsed calculations if currently inside a pin
+  let elapsedPercent = 0;
+  let hrsLeft = 0;
+  let remMins = 0;
+  if (currentPin) {
+    const startMins = currentPin.startHour * 60 + currentPin.startMinute;
+    const endMins = currentPin.endHour * 60 + currentPin.endMinute;
+    const totalMins = endMins - startMins;
+    const elapsedMins = nowTotalMins - startMins;
+    elapsedPercent = Math.min(Math.max((elapsedMins / totalMins) * 100, 0), 100);
+    const minsLeft = endMins - nowTotalMins;
+    hrsLeft = Math.floor(minsLeft / 60);
+    remMins = minsLeft % 60;
+  }
+
   return (
     <div className={cn(
       "flex flex-col flex-1 bg-paper relative font-sans pb-12 transition-all duration-300",
@@ -975,7 +1028,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                       <div 
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleOpenEditPin(pin);
+                          setActivePopoverPinId(activePopoverPinId === pin.id ? null : pin.id);
                         }}
                         className="absolute cursor-pointer pointer-events-auto hover:scale-110 active:scale-95 transition-transform"
                         style={{
@@ -991,7 +1044,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                       <div 
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleOpenEditPin(pin);
+                          setActivePopoverPinId(activePopoverPinId === pin.id ? null : pin.id);
                         }}
                         className="absolute cursor-pointer pointer-events-auto hover:scale-110 active:scale-95 transition-transform"
                         style={{
@@ -1438,15 +1491,210 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
           </div>
         </div>
         {isMinimizedView && (
-          <div className="bg-ink text-paper font-mono text-[8px] md:text-[9.5px] py-2 px-4 uppercase tracking-widest font-black flex items-center justify-between border-t-[4px] border-ink shrink-0 select-none">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse border border-emerald-300" /> 
-              SCALE VIEW ACCORDING TO SCREEN WIDTH
-            </span>
-            <span className="opacity-70 hidden sm:inline">- VIEW ONLY -</span>
-            <span className="text-taxi">CLICK "THIS WEEK'S TRANSIT" TO EXIT</span>
+          <div className="border-t-[4px] border-ink bg-[#FCFAF5] p-3 flex flex-col gap-2.5 shrink-0 select-none">
+            {/* Header section of the monitor */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b-2 border-dashed border-ink/20 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className={cn(
+                    "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                    currentPin ? "bg-emerald-400" : "bg-amber-400"
+                  )}></span>
+                  <span className={cn(
+                    "relative inline-flex rounded-full h-2 w-2",
+                    currentPin ? "bg-emerald-500" : "bg-amber-500"
+                  )}></span>
+                </span>
+                <span className="font-mono text-[9px] md:text-[10px] font-black uppercase tracking-widest text-ink flex items-center gap-1">
+                  <Activity size={10} className="text-ink animate-[pulse_2s_infinite]" />
+                  LIVE TRANSIT ROUTE MONITOR
+                </span>
+              </div>
+              
+              <div className="font-mono text-[8px] md:text-[9px] font-bold text-ink-light bg-paper-dark border border-ink/25 px-1.5 py-0.5 rounded uppercase">
+                CURRENT STATION CLOCK: {format(now, 'hh:mm:ss a')}
+              </div>
+            </div>
+
+            {/* Main Alert & Progress Container */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+              {/* Alert details */}
+              <div className="md:col-span-4 border-2 border-ink bg-paper p-2 shadow-[2px_2px_0px_#1A1A1B] flex flex-col justify-center min-h-[58px]">
+                {currentPin ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[8.5px] font-black uppercase tracking-wide text-ink truncate max-w-[85%]">
+                        ACTIVE PIN: {currentPin.name}
+                      </span>
+                      <span 
+                        className="w-2.5 h-2.5 rounded-full border border-ink shrink-0 animate-pulse"
+                        style={{ backgroundColor: currentPin.color }}
+                      />
+                    </div>
+                    <div className="font-mono text-[9.5px] font-black text-emerald-600 mt-1 flex items-center gap-1">
+                      <Timer size={10} strokeWidth={3} className="animate-[spin_40s_linear_infinite]" />
+                      {hrsLeft > 0 ? `${hrsLeft}h ${remMins}m` : `${remMins}m`} REMAINING
+                    </div>
+                    <div className="font-mono text-[7px] text-ink-light uppercase mt-0.5 font-semibold">
+                      SPAN: {formatPinTime(currentPin.startHour, currentPin.startMinute)} - {formatPinTime(currentPin.endHour, currentPin.endMinute)}
+                    </div>
+                  </>
+                ) : nextPin ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[8.5px] font-black uppercase tracking-wide text-ink-light">
+                        STATUS: OFF-PEAK TRANSIT
+                      </span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 border border-ink shrink-0 animate-pulse" />
+                    </div>
+                    <div className="font-mono text-[9px] font-black text-amber-600 mt-1 flex items-center gap-1">
+                      <Milestone size={10} strokeWidth={2.5} />
+                      NEXT: IN {Math.floor(minsToNextPin / 60) > 0 ? `${Math.floor(minsToNextPin / 60)}h ${minsToNextPin % 60}m` : `${minsToNextPin % 60}m`}
+                    </div>
+                    <div className="font-sans font-bold text-[7.5px] text-ink uppercase mt-0.5 truncate">
+                      AWAITING DEPARTURE: {nextPin.name}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-mono text-[8.5px] font-black uppercase tracking-wide text-ink-light">
+                      STATUS: SLEEP MODE
+                    </div>
+                    <div className="font-mono text-[9.5px] font-bold text-ink-light/70 mt-1">
+                      NO ROUTE BLOCKS DEFINED
+                    </div>
+                    <div className="font-mono text-[7px] text-ink-light mt-0.5">
+                      CREATE PINS TO TRACK LIVE DAILY DOCKETS
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Progress visual rail */}
+              <div className="md:col-span-8 flex flex-col justify-center gap-1">
+                <div className="flex justify-between items-center px-1">
+                  <span className="font-mono text-[7.5px] font-black uppercase tracking-wider text-ink-light flex items-center gap-1">
+                    <Gauge size={9} />
+                    SECTION DURATION PROGRESS
+                  </span>
+                  {currentPin && (
+                    <span className="font-mono text-[8px] font-black text-ink-light bg-ink/5 px-1 py-0.2 rounded">
+                      {Math.round(elapsedPercent)}% COMPLETE
+                    </span>
+                  )}
+                </div>
+                
+                {/* Vintage mechanical striped railroad progress container */}
+                <div className="relative border-2 border-ink bg-paper h-[13px] shadow-[1px_1px_0px_#1A1A1B] flex items-center overflow-hidden">
+                  {/* Railway ties background lines inside the progress bar */}
+                  <div className="absolute inset-0 flex justify-between pointer-events-none opacity-[0.12] px-2">
+                    {Array.from({ length: 24 }).map((_, i) => (
+                      <div key={i} className="w-[1.5px] h-full bg-ink" />
+                    ))}
+                  </div>
+
+                  {currentPin ? (
+                    <div 
+                      className="h-full relative transition-all duration-500 ease-out fill-current"
+                      style={{ 
+                        width: `${elapsedPercent}%`,
+                        backgroundColor: currentPin.color || '#E11D48',
+                        backgroundImage: 'repeating-linear-gradient(45deg, rgba(26,26,27,0.06), rgba(26,26,27,0.06) 5px, transparent 5px, transparent 10px)'
+                      }}
+                    />
+                  ) : nextPin ? (
+                    <div 
+                      className="h-full bg-amber-200/55 animate-pulse relative transition-all"
+                      style={{ 
+                        width: '100%',
+                        backgroundImage: 'repeating-linear-gradient(45deg, rgba(217,119,6,0.08), rgba(217,119,6,0.08) 6px, transparent 6px, transparent 12px)'
+                      }}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {/* Horizontal Transit Line Map (Subway route rendering) */}
+            {sortedPins.length > 0 && (
+              <div className="relative mt-2 border-t-2 border-dashed border-ink/15 pt-2">
+                <div className="font-mono text-[7.5px] font-black uppercase tracking-wider text-ink-light mb-2 flex items-center gap-1.5">
+                  <Milestone size={10} className="shrink-0 text-ink-light" />
+                  STATION ROUTE MAP (TOTAL SCHEDULED HOURS: {sortedPins.reduce((sum, p) => {
+                    const startM = p.startHour * 60 + p.startMinute;
+                    const endM = p.endHour * 60 + p.endMinute;
+                    return sum + (endM - startM) / 60;
+                  }, 0).toFixed(1)} hrs)
+                </div>
+
+                {/* Simulated subway system track alignment */}
+                <div className="relative flex items-center justify-between px-6 py-2 mt-1 gap-4 overflow-x-auto scrollbar-thin">
+                  {/* Outer mechanical line */}
+                  <div className="absolute left-10 right-10 h-[4.5px] bg-ink/10 rounded-full" />
+                  
+                  {sortedPins.map((p) => {
+                    const isActive = currentPin?.id === p.id;
+                    const isNext = !currentPin && nextPin?.id === p.id;
+                    
+                    const startM = p.startHour * 60 + p.startMinute;
+                    const endM = p.endHour * 60 + p.endMinute;
+                    const durationHrs = (endM - startM) / 60;
+
+                    return (
+                      <div key={p.id} className="relative z-10 flex flex-col items-center min-w-[75px] max-w-[100px]">
+                        {/* Transit connection Station Bullet marker button */}
+                        <div 
+                          className={cn(
+                            "w-5 h-5 rounded-full border-[3px] border-ink flex items-center justify-center transition-all bg-paper relative shadow-[1px_1px_0px_rgba(0,0,0,0.15)]",
+                            isActive ? "scale-115 ring-4 ring-emerald-400/30" : "",
+                            isNext ? "ring-2 ring-amber-400/30" : ""
+                          )}
+                        >
+                          <div 
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: p.color }}
+                          />
+                        </div>
+
+                        {/* Station badge Details box */}
+                        <div className="flex flex-col items-center mt-2 text-center px-1">
+                          <span className={cn(
+                            "font-sans font-black uppercase text-[8px] tracking-tight truncate max-w-[78px] leading-tight",
+                            isActive ? "text-emerald-700" : "text-ink/80",
+                            isNext ? "text-amber-700" : ""
+                          )}>
+                            {p.name}
+                          </span>
+                          <span className="font-mono text-[6.5px] font-bold text-ink-light flex items-center gap-0.5 leading-none mt-0.5 whitespace-nowrap">
+                            ⏰ {durationHrs < 1 ? `${Math.round(durationHrs * 60)}m` : `${durationHrs.toFixed(1)}h`}
+                          </span>
+                          <span className="font-mono text-[5.5px] text-ink-light/65 uppercase leading-none mt-0.5">
+                            {formatPinTime(p.startHour, p.startMinute)}
+                          </span>
+                        </div>
+
+                        {/* YOU ARE HERE miniature mechanical arrow marker pin */}
+                        {isActive && (
+                          <div className="absolute -top-3.5 flex flex-col items-center transition-all">
+                            <span className="font-mono text-[5.5px] font-black text-emerald-600 tracking-wider">HERE</span>
+                            <div className="w-[1.5px] h-1 bg-emerald-600 animate-[bounce_1s_infinite]" />
+                          </div>
+                        )}
+                        {isNext && (
+                          <div className="absolute -top-3.5 flex flex-col items-center transition-all">
+                            <span className="font-mono text-[5.5px] font-black text-amber-600 tracking-wider">NEXT</span>
+                            <div className="w-[1.5px] h-1 bg-amber-600" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
+
       </div>
 
       {/* Floating Action Button */}

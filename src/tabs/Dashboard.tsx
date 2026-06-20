@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Task, Habit, Birthday } from '../types';
 import { format, isSameDay } from 'date-fns';
-import { Play, Square, RotateCcw, Check, ChevronDown, ChevronUp, Gift, Plus, Trash2, Edit2, Sparkles, Award, Settings, Calendar, Clock, Flame } from 'lucide-react';
+import { Play, Square, RotateCcw, Check, ChevronDown, ChevronUp, Gift, Plus, Trash2, Edit2, Sparkles, Award, Settings, Calendar, Clock, Flame, X, Activity, Gauge } from 'lucide-react';
 import { cn, toIST } from '../lib/utils';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { HabitIcon } from '../components/HabitIcon';
+import { SubwayTransitIcon } from '../components/SubwayTransitIcon';
 
 // Accurate dynamic habit statistics calculator matching transit-themed custom days
 export function getHabitStats(habit: Habit, todayDate: Date) {
@@ -112,6 +113,7 @@ export function Dashboard({
   
   // State for habit creation/edition modal
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
+  const [isHabitWidgetExpanded, setIsHabitWidgetExpanded] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [habitFormName, setHabitFormName] = useState('');
   const [habitFormHour, setHabitFormHour] = useState(8);
@@ -235,8 +237,6 @@ export function Dashboard({
   const todayOccurrences = getOccurrencesForDateRange(tasks, today, today);
   const todayTasks = todayOccurrences.filter(t => t.status !== 'done');
   const completedTasks = todayOccurrences.filter(t => t.status === 'done');
-  const totalTasks = todayOccurrences.length || 1;
-  const progressPercent = Math.round((completedTasks.length / totalTasks) * 100);
 
   const todayStr = format(today, 'yyyy-MM-dd');
   const dayOfWeek = today.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
@@ -255,6 +255,10 @@ export function Dashboard({
 
   const todayPendingHabits = todayHabits.filter(h => !h.history?.[todayStr]);
   const todayCompletedHabits = todayHabits.filter(h => !!h.history?.[todayStr]);
+
+  const totalDailyItems = todayOccurrences.length + todayHabits.length;
+  const completedDailyItems = completedTasks.length + todayCompletedHabits.length;
+  const progressPercent = totalDailyItems > 0 ? Math.round((completedDailyItems / totalDailyItems) * 100) : 0;
 
   const sortedTodayHabits = [...todayHabits].sort((a, b) => {
     const aHour = a.hour !== undefined ? a.hour : 8;
@@ -607,37 +611,115 @@ export function Dashboard({
       <div className="md:col-span-5 space-y-6">
         
         {/* Subway Momentum */}
-        <div className="border-[6px] border-ink p-4 relative overflow-hidden bg-paper">
-          <div className="absolute top-0 right-0 p-2 font-mono text-4xl text-ink font-black opacity-10">{progressPercent}'</div>
-          <h2 className="font-sans font-black uppercase tracking-tight text-xl mb-1 mt-1">Subway Momentum</h2>
-          <p className="font-mono text-[10px] font-bold uppercase opacity-60 border-b border-ink pb-2 mb-4">Progress along the Local-8 Line</p>
+        <div className="border-[6px] border-ink p-4 relative overflow-hidden bg-[#FCFAF5] rounded-sm shadow-[4px_4px_0px_#1A1A1B]">
+          {/* Subtle watermark */}
+          <div className="absolute top-1.5 right-2 p-1 font-mono text-3xl text-ink font-black opacity-[0.06] select-none">{progressPercent}%</div>
           
-          <div className="relative pt-6 pb-2">
-            {/* The line */}
-            <div className="absolute left-0 right-0 h-1 bg-ink top-8"></div>
-            <div 
-              className="absolute left-0 h-1 bg-subway-red top-8 transition-all duration-1000"
-              style={{ width: `${progressPercent}%` }}
-            ></div>
-            
-            {/* Stations */}
-            <div className="relative flex justify-between">
-              {[0, 25, 50, 75, 100].map(stop => (
-                <div key={stop} className="flex flex-col items-center">
-                  <div className={cn(
-                    "w-3 h-3 rounded-full border-2 border-ink z-10",
-                    progressPercent >= stop ? "bg-subway-red" : "bg-paper"
-                  )}></div>
-                </div>
-              ))}
+          <div className="flex justify-between items-start border-b-2 border-ink pb-2.5 mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <h2 className="font-sans font-black uppercase tracking-tight text-md flex items-center gap-1.5">
+                  SUBWAY MOMENTUM
+                </h2>
+              </div>
+              <p className="font-mono text-[8px] font-bold uppercase text-ink-light tracking-wider mt-0.5">Unified Docket & Habit Dispatch Monitor</p>
             </div>
-            
-            <div className="flex justify-between mt-4 font-mono text-[10px] uppercase font-bold tracking-widest text-ink-light">
-              <span>Uptown</span>
-              <span>{progressPercent}% Complete</span>
-              <span>Downtown</span>
+            {/* Visual Digital Display */}
+            <div className="flex flex-col items-end">
+              <span className="font-mono text-[11px] font-black text-ink-light bg-ink/5 px-1.5 py-0.5 rounded leading-none select-none">
+                {completedDailyItems} / {totalDailyItems} STOPS
+              </span>
+              <span className="font-mono text-[7px] text-[#22C55E] font-black tracking-widest uppercase mt-0.5 select-none animate-pulse">
+                {progressPercent}% EFFICIENT
+              </span>
             </div>
           </div>
+
+          {/* Unified Dispatch Linear Map */}
+          {totalDailyItems > 0 ? (
+            <div className="relative pt-6 pb-2.5 px-2 mt-2">
+              {/* Railroad background line tie indicators */}
+              <div className="absolute inset-x-2 h-[5px] bg-ink/10 top-8 rounded-full pointer-events-none" />
+              {/* Railroad active route neon track */}
+              <div 
+                className="absolute left-2 h-[5px] bg-[#EF4444] top-8 rounded-full transition-all duration-1000 ease-out"
+                style={{ width: `calc(${progressPercent}% - 4px)` }}
+              />
+
+              {/* Station pointers dynamically rendered along the route */}
+              <div className="relative flex justify-between items-center gap-1">
+                {(() => {
+                  const items = [
+                    ...todayOccurrences.map(task => ({
+                      id: task.id,
+                      name: task.title,
+                      isDone: task.status === 'done',
+                      type: 'task',
+                      icon: '📋'
+                    })),
+                    ...todayHabits.map(habit => ({
+                      id: habit.id,
+                      name: habit.name,
+                      isDone: !!habit.history?.[todayStr],
+                      type: 'habit',
+                      icon: habit.icon || '📍'
+                    }))
+                  ];
+
+                  // Limit displays if we have way too many stations to preserve UI spacing
+                  const visibleItems = items.slice(0, 5);
+                  
+                  return visibleItems.map((item, index) => {
+                    const isCompleted = item.isDone;
+                    return (
+                      <div key={item.id} className="flex flex-col items-center flex-1 max-w-[80px]" title={`${item.type.toUpperCase()}: ${item.name}`}>
+                        {/* Mechanical Station Bullet Node */}
+                        <div 
+                          className={cn(
+                            "w-4 h-4 rounded-full border-2 border-ink flex items-center justify-center bg-paper z-10 transition-all duration-300",
+                            isCompleted ? "scale-110 shadow-sm border-[#10B981] bg-[#10B981]" : "hover:border-subway-red"
+                          )}
+                          style={isCompleted ? { backgroundColor: '#10B981' } : undefined}
+                        >
+                          {isCompleted ? (
+                            <Check size={9} strokeWidth={5} className="text-white" />
+                          ) : (
+                            <span className="font-mono text-[6px] font-bold text-ink-light">{index + 1}</span>
+                          )}
+                        </div>
+                        {/* Sub label name */}
+                        <span className="font-sans font-black text-[7px] text-ink/80 text-center truncate w-full mt-2 uppercase tracking-tight leading-none">
+                          {item.name}
+                        </span>
+                        <span className="font-mono text-[5.5px] text-ink-light/70 uppercase mt-0.5 leading-none">
+                          {item.icon} {item.type}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Transit tracker message */}
+              <div className="flex justify-between items-center mt-6 pt-3 border-t border-dashed border-ink/15 font-mono text-[8.5px] font-black uppercase tracking-wider text-ink-light">
+                <span className="flex items-center gap-1">
+                  <Gauge size={10} className="text-ink-light" strokeWidth={2.5} />
+                  LINE: LOCAL-8 EXPRESS
+                </span>
+                <span>{progressPercent}% ARRIVED</span>
+                <span className="opacity-75">TERM: TODAY</span>
+              </div>
+            </div>
+          ) : (
+            <div className="py-6 border border-dashed border-ink/20 bg-paper-dark/15 text-center px-4 rounded">
+              <p className="font-serif italic text-xs text-ink/50">No dispatches scheduled on active route lines today.</p>
+              <p className="font-mono text-[7.5px] text-ink-light uppercase mt-1.5 font-bold tracking-widest">STATIONS ARE OPEN & AWAITING COMMUTE SCHEDULING</p>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -646,10 +728,24 @@ export function Dashboard({
             <div className="absolute top-1.5 right-2 font-mono text-[7px] opacity-35 font-black uppercase tracking-widest hidden sm:block">SYS: MONITOR_V2</div>
             <div>
               <div className="flex justify-between items-center border-b-2 border-ink pb-1.5 mb-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">🚇</span>
-                  <div>
-                    <h3 className="font-sans font-black uppercase text-xs tracking-tight text-ink leading-none">Habit Tracks</h3>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => setIsHabitWidgetExpanded(true)}
+                    className="cursor-pointer hover:scale-110 active:scale-95 transition-all outline-none"
+                    title="Click to expand Subway Terminal Console"
+                  >
+                    <SubwayTransitIcon size={30} />
+                  </button>
+                  <div 
+                    onClick={() => setIsHabitWidgetExpanded(true)}
+                    className="cursor-pointer group"
+                    title="Click to expand Subway Terminal Console"
+                  >
+                    <h3 className="font-sans font-black uppercase text-xs tracking-tight text-ink leading-none group-hover:text-subway-red transition-colors flex items-center gap-1">
+                      Habit Tracks
+                      <span className="text-[6.5px] bg-subway-red/10 border border-subway-red/30 px-1 rounded-3xs text-subway-red font-bold font-mono tracking-widest uppercase animate-pulse">EXPAND</span>
+                    </h3>
                     <p className="font-mono text-[7.5px] text-ink-light font-bold uppercase mt-0.5 tracking-wider">Subway Transit Network</p>
                   </div>
                 </div>
@@ -1103,6 +1199,345 @@ export function Dashboard({
           </div>
         )}
         
+        {/* EXPANDED SUBWAY TRANSIT INFORMATION TERMINAL BOARD */}
+        {isHabitWidgetExpanded && (
+          <div className="fixed inset-0 bg-[#F4F1EA] z-50 overflow-y-auto overflow-x-hidden p-4 md:p-8 flex flex-col gap-6 font-sans text-ink border-[8px] md:border-[12px] border-ink animate-in fade-in zoom-in-95 duration-200 select-none">
+            {/* Control Board Header */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b-[6px] border-ink pb-5">
+              <div className="flex items-center gap-3">
+                {/* Mechanical Pulsing Signal lights */}
+                <div className="flex gap-1.5 shrink-0 bg-ink p-1.5 rounded border-2 border-ink-light/20">
+                  <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse border border-emerald-300" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-amber-500 animate-[pulse_1.5s_infinite] border border-amber-300" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-subway-red border border-red-300" />
+                </div>
+                <div>
+                  <h2 className="font-sans font-black uppercase text-xl md:text-2xl tracking-tight leading-none flex items-center gap-2">
+                    SUBWAY METRO DISPATCH CONSOLE
+                  </h2>
+                  <p className="font-mono text-[9px] md:text-[10px] text-ink-light font-black uppercase tracking-wider mt-1 flex items-center gap-1.5">
+                    <Activity size={12} className="text-subway-red animate-pulse" />
+                    LIVE NETWORK OPERATIONS MONITOR & TICKETING PANEL
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Operation Metrics banner */}
+              <div className="flex flex-wrap items-center gap-2 font-mono text-[9px] font-black">
+                <div className="bg-ink text-paper border border-ink px-2.5 py-1 rounded shadow-[1.5px_1.5px_0px_#1A1A1B] uppercase whitespace-nowrap">
+                  🚃 ACTIVE LINES: {habits.length}
+                </div>
+                <div className="bg-emerald-500 text-white border border-ink px-2.5 py-1 rounded shadow-[1.5px_1.5px_0px_#1A1A1B] uppercase whitespace-nowrap">
+                  🎫 APPROVED TODAY: {habits.filter(h => h.history?.[todayStr]).length}/{habits.length}
+                </div>
+                {/* Close Overlay btn */}
+                <button
+                  type="button"
+                  onClick={() => setIsHabitWidgetExpanded(false)}
+                  className="bg-subway-red hover:bg-subway-red/90 text-white border-2 border-ink px-4 py-1.5 text-[10px] font-mono font-black uppercase rounded shadow-[2.5px_2.5px_0px_#1A1A1B] hover:translate-y-[-0.5px] active:translate-y-[0.5px] active:shadow-none transition-all cursor-pointer flex items-center gap-1.5 ml-0 lg:ml-4 select-none"
+                >
+                  <X size={11} strokeWidth={3} /> CLOSE PANEL
+                </button>
+              </div>
+            </div>
+
+            {/* Retro Analog Control Gauges Section */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Gauge A: Overall completion success rate */}
+              <div className="border-4 border-ink bg-paper p-3.5 rounded shadow-[3px_3px_0px_#1A1A1B] relative overflow-hidden flex flex-col justify-between">
+                <div className="absolute top-1 right-2 text-[6.5px] font-mono font-black text-ink-light opacity-30 select-none">METER_R1</div>
+                <div>
+                  <span className="font-mono text-[8px] font-black text-ink-light uppercase tracking-wider block">ROUTE COMPLETION RATE</span>
+                  <div className="flex items-baseline mt-2 gap-1.5">
+                    <span className="font-sans font-black text-2xl leading-none">
+                      {habits.length > 0 
+                        ? Math.round(habits.reduce((sum, h) => sum + getHabitStats(h, today).completionRate30, 0) / habits.length)
+                        : 0
+                      }%
+                    </span>
+                    <span className="font-mono text-[8.5px] text-emerald-600 font-extrabold font-black">▲ OPTIMAL FLOW</span>
+                  </div>
+                  {/* Miniature railway style bar meter */}
+                  <div className="relative border-2 border-ink bg-paper-dark h-3 shadow-[1px_1px_0px_#1A1A1B] mt-2 overflow-hidden">
+                    <div 
+                      className="h-full bg-emerald-500 transition-all duration-500"
+                      style={{ 
+                        width: `${habits.length > 0 
+                          ? Math.round(habits.reduce((sum, h) => sum + getHabitStats(h, today).completionRate30, 0) / habits.length)
+                          : 0}%` 
+                      }}
+                    />
+                  </div>
+                </div>
+                <p className="font-sans text-[8px] text-ink-light/80 mt-2 font-bold uppercase">Average performance efficiency across all running routes in past 30 days.</p>
+              </div>
+
+              {/* Gauge B: Total ticket punch actions */}
+              <div className="border-4 border-ink bg-paper p-3.5 rounded shadow-[3px_3px_0px_#1A1A1B] relative overflow-hidden flex flex-col justify-between">
+                <div className="absolute top-1 right-2 text-[6.5px] font-mono font-black text-ink-light opacity-30 select-none">METER_R2</div>
+                <div>
+                  <span className="font-mono text-[8px] font-black text-ink-light uppercase tracking-wider block">CONSECUTIVE NETWORK STREAK</span>
+                  <div className="flex items-baseline mt-2 gap-1.5">
+                    <span className="font-sans font-black text-2xl leading-none flex items-center gap-1 text-subway-red">
+                      🔥 {habits.length > 0 
+                        ? Math.max(...habits.map(h => getHabitStats(h, today).currentStreak))
+                        : 0
+                      }d
+                    </span>
+                    <span className="font-mono text-[8.5px] text-subway-red font-black uppercase animate-pulse">● PEAK COMMUTE</span>
+                  </div>
+                  <div className="relative border-2 border-ink bg-paper-dark h-3 shadow-[1px_1px_0px_#1A1A1B] mt-2 overflow-hidden">
+                    <div 
+                      className="h-full bg-subway-red transition-all duration-500"
+                      style={{ 
+                        width: `${Math.min((habits.length > 0 ? Math.max(...habits.map(h => getHabitStats(h, today).currentStreak)) : 0) * 10, 100)}%` 
+                      }}
+                    />
+                  </div>
+                </div>
+                <p className="font-sans text-[8px] text-ink-light/80 mt-2 font-bold uppercase">The longest active streak of continuous daily habit completions currently on file.</p>
+              </div>
+
+              {/* Gauge C: Central Dispatch News */}
+              <div className="border-4 border-ink bg-[#1A1A1B] text-paper p-3.5 rounded shadow-[3px_3px_0px_#1A1A1B] relative overflow-hidden flex flex-col justify-between">
+                <div>
+                  <span className="font-mono text-[8px] font-black text-taxi uppercase tracking-wider block">DISPATCH CONTROLLER MESSAGE</span>
+                  <div className="font-serif italic text-xs text-[#FCFAF5]/90 mt-2 leading-relaxed">
+                    "ALL SYSTEMS GREEN. ENSURE PROMPT TICKET APPROVAL AT EACH TERMINAL TO AVOID TIMELINE ROUTE DERAILMENT."
+                  </div>
+                </div>
+                <div className="font-mono text-[7px] text-white/50 uppercase mt-2 font-black tracking-widest flex justify-between">
+                  <span>SYSTEM_CODE: OK/74</span>
+                  <span className="animate-pulse text-emerald-400">● LIVE CONNECTION</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Core Lines monitoring section */}
+            <div className="flex-1 border-[6px] border-ink bg-paper-dark/30 p-4 md:p-6 rounded-sm min-h-[400px]">
+              <div className="flex justify-between items-center border-b-2 border-ink pb-3 mb-5">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🛤️</span>
+                  <div>
+                    <h3 className="font-sans font-black uppercase text-base tracking-tight text-ink leading-none">ACTIVE ROUTE LINES</h3>
+                    <p className="font-mono text-[8px] text-ink-light font-bold uppercase mt-1 tracking-wider">MANAGE, ARCHIVE OR DECOMMISSION TRACK CONFIGURATIONS</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={openCreateHabit}
+                  className="bg-ink hover:bg-subway-red text-white py-1 md:py-1.5 px-3 rounded-sm border-2 border-ink hover:scale-105 transition-all outline-none cursor-pointer flex items-center gap-2 shadow-[2px_2px_0px_#1A1A1B] text-[10px] font-mono font-black uppercase"
+                  title="Add new habit route"
+                >
+                  <Plus size={11} strokeWidth={3} /> NEW LINE
+                </button>
+              </div>
+
+              {habits.length === 0 ? (
+                <div className="py-20 text-center bg-paper border border-dashed border-ink/30 rounded shadow-[4px_4px_0px_#1A1A1B]">
+                  <p className="font-serif italic text-sm text-ink/50">No active transit route networks created.</p>
+                  <button 
+                    onClick={openCreateHabit}
+                    className="mt-4 bg-taxi hover:bg-taxi/90 text-ink border-2 border-ink px-4 py-2 text-[10.5px] font-mono font-black uppercase rounded shadow-[2.5px_2.5px_0px_#1a1b1b] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer"
+                  >
+                    + CREATE NEW TRACK ROUTE
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {habits.map((habit) => {
+                    const stats = getHabitStats(habit, today);
+                    
+                    return (
+                      <div 
+                        key={habit.id} 
+                        className="relative bg-paper border-[4px] border-ink p-4 md:p-5 rounded shadow-[4px_4px_0px_#1A1A1B] flex flex-col gap-4 overflow-hidden animate-in fade-in duration-350"
+                      >
+                        {/* Custom visual route left-sticker accent */}
+                        <div className="absolute left-0 top-0 bottom-0 w-2.5" style={{ backgroundColor: habit.color || '#E11D48' }} />
+
+                        {/* Top Line Info */}
+                        <div className="pl-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b-2 border-dashed border-ink/15 pb-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Route Icon */}
+                            <div 
+                              className="w-8 h-8 rounded-full border-2 border-ink flex items-center justify-center shrink-0 shadow-[2px_2px_0px_#1A1A1B] text-white"
+                              style={{ backgroundColor: habit.color || '#E11D48' }}
+                            >
+                              <HabitIcon iconName={habit.icon || '📍'} size={14} className="text-white shrink-0" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-sans font-black uppercase text-sm text-ink truncate tracking-tight leading-none">
+                                {habit.name}
+                              </h4>
+                              <div className="flex items-center gap-1.5 mt-1.5 leading-none">
+                                <span className="font-mono text-[7.5px] font-black tracking-wider text-subway-red uppercase bg-subway-red/10 border border-subway-red/30 px-1.5 py-0.5 rounded-3xs">
+                                  {habit.frequency || 'daily'}
+                                </span>
+                                {habit.hour !== undefined && (
+                                  <span className="font-mono text-[7.5px] font-bold text-ink/65 bg-paper-dark border border-ink/15 px-1.5 py-0.5 rounded-3xs font-black">
+                                    ⏰ SCHEDULED CHRONO: {String(habit.hour).padStart(2, '0')}:{String(habit.minute !== undefined ? habit.minute : 0).padStart(2, '0')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Streak Display info */}
+                          <div className="flex items-center gap-2 shrink-0 select-none">
+                            <span className="font-mono text-[9px] font-black bg-taxi border-2 border-ink px-2.5 py-1 rounded shadow-[2px_2px_0px_#1A1A1B] uppercase flex items-center gap-1 leading-none">
+                              🔥 Streak {stats.currentStreak} Days
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Mid Station Nodes tracker */}
+                        <div className="pl-3 py-1">
+                          <span className="font-mono text-[8px] font-black text-ink-light uppercase block mb-3 tracking-wider">
+                            🚉 RAILROAD STATION STOPS (CLICK STATION DOTS TO COMPLETE/REVERT SESSIONS)
+                          </span>
+                          <div className="bg-[#FCFAF5] border border-ink/10 rounded p-4 relative">
+                            {/* Custom railroad line background */}
+                            <div className="absolute left-6 right-6 h-[4.5px] top-[42px] bg-ink/10 rounded-full" />
+                            <div 
+                              className="absolute left-6 h-[4.5px] top-[42px] rounded-full transition-all duration-300" 
+                              style={{ 
+                                backgroundColor: habit.color || '#E11D48',
+                                width: 'calc(100% - 48px)'
+                              }}
+                            />
+
+                            <div className="flex justify-between items-center px-2 relative z-10 gap-2 overflow-x-auto scrollbar-none">
+                              {daysOfWeekList.map((dayObj) => {
+                                const isDone = !!habit.history?.[dayObj.dateStr];
+                                const dayOfWeek = dayObj.rawDate.getDay();
+                                const freq = habit.frequency || 'daily';
+                                let isScheduled = true;
+                                if (freq === 'weekdays') isScheduled = dayOfWeek >= 1 && dayOfWeek <= 5;
+                                else if (freq === 'weekends') isScheduled = dayOfWeek === 0 || dayOfWeek === 6;
+                                else if (freq === 'weekly' || freq === 'custom') {
+                                  if (habit.daysOfWeek && habit.daysOfWeek.length > 0) {
+                                    isScheduled = habit.daysOfWeek.includes(dayOfWeek);
+                                  }
+                                }
+                                const isToday = isSameDay(dayObj.rawDate, today);
+
+                                return (
+                                  <div key={dayObj.dateStr} className="flex flex-col items-center min-w-[32px] cursor-pointer">
+                                    <span className="font-mono text-[7px] text-ink-light/50 uppercase font-black tracking-widest leading-none mb-1.5">
+                                      {dayObj.shortLabel}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (toggleHabitHistory && isScheduled) {
+                                          toggleHabitHistory(habit.id, dayObj.dateStr);
+                                        }
+                                      }}
+                                      disabled={!isScheduled}
+                                      className={cn(
+                                        "w-[22px] h-[22px] rounded-full border-2 border-ink flex items-center justify-center transition-all cursor-pointer select-none relative shadow-[1px_1px_0px_rgba(0,0,0,0.15)]",
+                                        !isScheduled 
+                                          ? "bg-ink/10 border-ink/15 opacity-30 cursor-not-allowed border-dashed" 
+                                          : isDone 
+                                            ? "text-white scale-110 shadow-md hover:scale-120 active:scale-95" 
+                                            : "bg-paper hover:bg-paper-dark hover:scale-110 hover:shadow-xs",
+                                        isToday && !isDone && "ring-4 ring-subway-red/30 animate-pulse border-subway-red"
+                                      )}
+                                      style={isDone && isScheduled ? { backgroundColor: habit.color || '#E11D48' } : undefined}
+                                      title={`${dayObj.dayLabel}: ${isDone ? 'COMPLETED' : 'PENDING'}`}
+                                    >
+                                      {isDone ? (
+                                        <Check size={10} className="text-white shrink-0" strokeWidth={5} />
+                                      ) : !isScheduled ? (
+                                        <span className="text-[7px] font-black opacity-30">❌</span>
+                                      ) : (
+                                        <div className="w-[5px] h-[5px] rounded-full bg-ink/30" />
+                                      )}
+                                    </button>
+                                    <span className="font-sans font-black text-[6.5px] text-ink-light leading-none uppercase mt-1.5 tracking-tighter">
+                                      {dayObj.dayLabel.slice(0, 3)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Route performance stats & Dispatch toolbar button approvals */}
+                        <div className="pl-3 border-t border-ink/10 border-dashed pt-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div className="flex flex-wrap gap-2 font-mono text-[8px] font-black text-ink-light">
+                            <span className="bg-ink/5 px-2 py-0.5 rounded font-black uppercase">📊 Line Efficiency: <strong className="text-ink font-mono">{stats.completionRate30}%</strong></span>
+                            <span className="bg-ink/5 px-2 py-0.5 rounded font-black uppercase">🏆 Total Trips: <strong className="text-ink font-mono">{stats.totalCompletions} Trips</strong></span>
+                          </div>
+
+                          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            {/* Edit dispatcher settings */}
+                            <button
+                              type="button"
+                              onClick={(e) => openEditHabit(habit, e)}
+                              className="bg-paper hover:bg-paper-dark text-ink border-2 border-ink py-1 px-2.5 text-[8.5px] font-mono font-black uppercase rounded shadow-[1.5px_1.5px_0px_#1A1A1B] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer flex items-center gap-1 hover:-translate-y-0.5 whitespace-nowrap"
+                              title="Modify dispatch properties"
+                            >
+                              <Settings size={10} strokeWidth={3} /> ADJUST SETTINGS
+                            </button>
+
+                            {/* Ticket punch status today toggle */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (toggleHabitHistory) {
+                                  toggleHabitHistory(habit.id, todayStr);
+                                }
+                              }}
+                              className={cn(
+                                "py-1 px-3 text-[8.5px] font-mono font-black uppercase rounded shadow-[1.5px_1.5px_0px_#1A1A1B] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer flex items-center gap-1 hover:-translate-y-0.5 whitespace-nowrap",
+                                habit.history?.[todayStr]
+                                  ? "bg-emerald-500 text-white border-2 border-white shadow-none"
+                                  : "bg-taxi text-ink border-2 border-ink hover:bg-taxi/90"
+                              )}
+                            >
+                              <span>🎫</span>
+                              <span>{habit.history?.[todayStr] ? 'TICKET APPROVED' : 'BOARD ROUTE TODAY'}</span>
+                            </button>
+
+                            {/* Decommission route tracks */}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (confirm("Are you sure you want to decommission this transit route? This will derail all recorded history.")) {
+                                  if (deleteHabit) {
+                                    await deleteHabit(habit.id);
+                                  }
+                                }
+                              }}
+                              className="bg-subway-red/10 text-subway-red hover:bg-subway-red hover:text-white border-2 border-subway-red py-1 px-2 text-[8.5px] font-mono font-black uppercase rounded shadow-[1.5px_1.5px_0px_rgba(225,29,72,0.15)] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer flex items-center justify-center shrink-0"
+                              title="Decommission track from list"
+                            >
+                              <Trash2 size={10} strokeWidth={3} />
+                            </button>
+                          </div>
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom operations manual bar */}
+            <div className="bg-ink text-[#FCFAF5]/80 py-2 px-4 rounded-sm flex flex-col md:flex-row justify-between items-center gap-2 text-[8.5px] font-mono font-black uppercase tracking-widest">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse border border-emerald-300" />
+                CENTRAL CONTROL SERVER: OPERATIONAL
+              </span>
+              <span className="opacity-60 hidden md:inline">SYSTEM CONTEXT: {format(today, 'yyyy-MM-dd')} IST</span>
+              <span className="text-taxi">EXIT SCREEN TO VIEW DASHBOARD</span>
+            </div>
+          </div>
+        )}
+
         {/* Quote Block */}
         <div className="bg-[#1c1c1c] text-[#f4f1ea] p-4 font-serif">
            <h3 className="uppercase font-mono text-[10px] font-bold tracking-widest text-taxi mb-2">Daily Intelligence</h3>
