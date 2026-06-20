@@ -29,6 +29,12 @@ export interface Habit {
   name: string;
   streak: number;
   history: Record<string, boolean>; // date (YYYY-MM-DD) -> completed
+  hour?: number; // 0-23
+  minute?: number; // 0-59
+  frequency?: 'daily' | 'weekdays' | 'weekends' | 'weekly' | 'custom';
+  daysOfWeek?: number[]; // [0 = Sun, 1 = Mon, ..., 6 = Sat]
+  color?: string; // hex colour code
+  icon?: string; // emoji character
 }
 
 export interface Birthday {

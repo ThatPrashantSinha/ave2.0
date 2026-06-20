@@ -373,6 +373,15 @@ export function useStore() {
     }
   };
 
+  const updateHabit = async (habit: Habit) => {
+    setHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
+    try {
+      await putHabitInDB(habit);
+    } catch (e) {
+      console.error('Failed to update habit in IndexedDB:', e);
+    }
+  };
+
   const deleteHabit = async (id: string) => {
     setHabits(prev => prev.filter(h => h.id !== id));
     try {
@@ -440,6 +449,7 @@ export function useStore() {
     updateTask,
     addHabit,
     deleteHabit,
+    updateHabit,
     toggleHabitHistory,
     addBirthday,
     deleteBirthday,

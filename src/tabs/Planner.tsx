@@ -1,9 +1,10 @@
 import React from 'react';
-import { Task, Birthday } from '../types';
+import { Task, Birthday, Habit } from '../types';
 import { WeeklyCalendar } from './WeeklyCalendar';
 
 interface PlannerProps {
   tasks: Task[];
+  habits: Habit[];
   addTask: (task: Omit<Task, 'id'>) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string, deleteMode?: 'this' | 'following' | 'all') => void;
@@ -12,11 +13,12 @@ interface PlannerProps {
   onOpenBirthdays: () => void;
 }
 
-export function Planner({ tasks, addTask, toggleTask, deleteTask, updateTask, birthdays, onOpenBirthdays }: PlannerProps) {
+export function Planner({ tasks, habits, addTask, toggleTask, deleteTask, updateTask, birthdays, onOpenBirthdays }: PlannerProps) {
   return (
     <div className="w-full h-full flex-1 flex flex-col">
       <WeeklyCalendar 
         tasks={tasks} 
+        habits={habits}
         addTask={addTask} 
         toggleTask={toggleTask} 
         deleteTask={deleteTask} 

@@ -21,8 +21,12 @@ export default function App() {
     toggleTaskStatus, 
     deleteTask, 
     updateTask, 
-    addBirthday, 
-    deleteBirthday, 
+    addHabit,
+    deleteHabit,
+    updateHabit,
+    toggleHabitHistory,
+    addBirthday,
+    deleteBirthday,
     refreshStore 
   } = useStore();
 
@@ -40,11 +44,16 @@ export default function App() {
             habits={habits} 
             toggleTask={toggleTaskStatus} 
             birthdays={birthdays} 
+            addHabit={addHabit}
+            deleteHabit={deleteHabit}
+            updateHabit={updateHabit}
+            toggleHabitHistory={toggleHabitHistory}
           />
         )}
         {currentTab === 'planner' && (
           <Planner 
             tasks={tasks} 
+            habits={habits}
             addTask={addTask} 
             toggleTask={toggleTaskStatus} 
             deleteTask={deleteTask} 

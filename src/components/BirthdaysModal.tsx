@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { Birthday } from '../types';
 import { X, Plus, Trash2, Gift, ChevronDown } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 const DAYS_IN_MONTH: Record<string, number> = {
   '01': 31, // January
@@ -193,60 +194,141 @@ export function BirthdaysModal({
               <div className="text-center py-6 border-2 border-dashed border-ink/30 text-ink/60 font-sans text-xs">
                 No birthdays saved. Keep track of family & crew here.
               </div>
-            ) : (
-              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                {birthdays.map((bday) => {
-                  let dateFormatted = bday.date;
-                  try {
-                    const safeDateString = bday.date.replace(/-/g, '/');
-                    const parsedDate = new Date(safeDateString);
-                    dateFormatted = format(parsedDate, 'MMMM d');
-                  } catch(_) {}
-                  return (
-                    <div 
-                      key={bday.id} 
-                      className="flex justify-between items-center bg-paper border-[3px] border-ink p-2.5 hover:bg-paper-dark transition-colors"
-                    >
-                      <div>
-                        <p className="font-sans font-bold text-xs text-ink">{bday.name}</p>
-                        <p className="font-mono text-[9px] text-ink/60 uppercase font-bold mt-0.5">📅 {dateFormatted}</p>
-                      </div>
-                      {confirmingId === bday.id ? (
-                        <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-150">
-                          <span className="font-mono text-[9px] font-black uppercase text-subway-red mr-1 select-none">SURE?</span>
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              deleteBirthday(bday.id);
-                              setConfirmingId(null);
-                            }}
-                            className="px-2 py-1 bg-subway-red text-white border-2 border-ink font-mono text-[9px] font-black uppercase hover:bg-black hover:text-white transition-all cursor-pointer shadow-[1px_1px_0px_#1A1A1B] active:shadow-none active:translate-y-[0.5px]"
-                          >
-                            YES
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => setConfirmingId(null)}
-                            className="px-2 py-1 bg-paper border-2 border-ink font-mono text-[9px] font-black uppercase hover:bg-ink hover:text-paper transition-all cursor-pointer shadow-[1px_1px_0px_#1A1A1B] active:shadow-none active:translate-y-[0.5px]"
-                          >
-                            NO
-                          </button>
+            ) : (() => {
+              // Calculate next occurrence and daysDiff for each birthday
+              const processedBirthdays = [...birthdays].map((bday) => {
+                let nextOccurTime = Infinity;
+                let daysDiff = Infinity;
+                let isToday = false;
+                let dateFormatted = bday.date;
+
+                try {
+                  const parts = bday.date.split('-');
+                  const y = parseInt(parts[0], 10);
+                  const m = parseInt(parts[1], 10) - 1; // 0-indexed
+                  const d = parseInt(parts[2], 10);
+
+                  const today = new Date();
+                  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  
+                  const curYear = today.getFullYear();
+                  let occ = new Date(curYear, m, d);
+                  
+                  if (occ.getTime() < todayStart.getTime()) {
+                    occ = new Date(curYear + 1, m, d);
+                  }
+                  
+                  nextOccurTime = occ.getTime();
+                  
+                  const diffMs = nextOccurTime - todayStart.getTime();
+                  daysDiff = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+                  
+                  isToday = (today.getMonth() === m && today.getDate() === d);
+                  if (isToday) {
+                    daysDiff = 0;
+                  }
+
+                  const parsedDate = new Date(y, m, d);
+                  dateFormatted = format(parsedDate, 'MMMM d');
+                } catch (_) {}
+
+                return {
+                  ...bday,
+                  nextOccurTime,
+                  daysDiff,
+                  isToday,
+                  dateFormatted
+                };
+              });
+
+              // Sort upcoming birthdays first
+              processedBirthdays.sort((a, b) => {
+                if (a.isToday && !b.isToday) return -1;
+                if (!a.isToday && b.isToday) return 1;
+                return a.nextOccurTime - b.nextOccurTime;
+              });
+
+              // Lowest daysDiff is the next coming birthday
+              const minDaysDiff = processedBirthdays.length > 0 ? processedBirthdays[0].daysDiff : Infinity;
+
+              return (
+                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  {processedBirthdays.map((bday) => {
+                    const isNextComing = bday.daysDiff === minDaysDiff && bday.daysDiff !== Infinity;
+                    return (
+                      <div 
+                        key={bday.id} 
+                        className={cn(
+                          "flex justify-between items-center border-[3px] border-ink p-2.5 transition-all",
+                          isNextComing 
+                            ? "bg-[#FEF08A] text-ink shadow-[2.5px_2.5px_0px_#1A1A1B] -translate-y-[1px]" 
+                            : "bg-paper hover:bg-paper-dark"
+                        )}
+                      >
+                        <div className="min-w-0 flex-1 mr-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-sans font-black text-xs text-ink uppercase tracking-tight truncate">
+                              {bday.name}
+                            </p>
+                            {isNextComing && (
+                              <span className="font-mono text-[7px] font-black uppercase text-paper bg-subway-red border border-ink py-0.5 px-1 rounded-sm shadow-[1px_1px_0px_#1A1A1B] shrink-0 leading-none">
+                                {bday.daysDiff === 0 ? "TODAY! 🥳" : "NEXT! 🎂"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="font-mono text-[9px] text-ink/70 uppercase font-bold flex items-center gap-0.5 leading-none">
+                              <span>📅</span> <span>{bday.dateFormatted}</span>
+                            </p>
+                            {bday.daysDiff !== Infinity && (
+                              <span className="font-mono text-[8px] text-ink/50 uppercase font-black tracking-normal leading-none bg-ink/5 border border-ink/10 px-1 py-0.5 rounded-sm shrink-0">
+                                {bday.daysDiff === 0 
+                                  ? "today" 
+                                  : bday.daysDiff === 1 
+                                    ? "tomorrow" 
+                                    : `in ${bday.daysDiff} days`
+                                }
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      ) : (
-                        <button 
-                          type="button"
-                          onClick={() => setConfirmingId(bday.id)} 
-                          className="p-1.5 text-ink hover:text-subway-red border-2 border-transparent hover:border-ink hover:bg-paper-dark transition-all rounded animate-none cursor-pointer"
-                          title="Delete entry"
-                        >
-                          <Trash2 size={13} strokeWidth={2.5} />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                        {confirmingId === bday.id ? (
+                          <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in zoom-in-95 duration-150">
+                            <span className="font-mono text-[9px] font-black uppercase text-subway-red mr-1 select-none">SURE?</span>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                deleteBirthday(bday.id);
+                                setConfirmingId(null);
+                              }}
+                              className="px-2 py-1 bg-subway-red text-white border-2 border-ink font-mono text-[9px] font-black uppercase hover:bg-black hover:text-white transition-all cursor-pointer shadow-[1px_1px_0px_#1A1A1B] active:shadow-none active:translate-y-[0.5px]"
+                            >
+                              YES
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => setConfirmingId(null)}
+                              className="px-2 py-1 bg-paper border-2 border-ink font-mono text-[9px] font-black uppercase hover:bg-ink hover:text-paper transition-all cursor-pointer shadow-[1px_1px_0px_#1A1A1B] active:shadow-none active:translate-y-[0.5px]"
+                            >
+                              NO
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            type="button"
+                            onClick={() => setConfirmingId(bday.id)} 
+                            className="p-1.5 text-ink hover:text-subway-red border-2 border-transparent hover:border-ink hover:bg-white/40 transition-all rounded animate-none cursor-pointer shrink-0"
+                            title="Delete entry"
+                          >
+                            <Trash2 size={13} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

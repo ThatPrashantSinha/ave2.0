@@ -1,14 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, getHours, getMinutes, addHours } from 'date-fns';
-import { Task, Birthday } from '../types';
+import { Task, Birthday, Habit } from '../types';
 import { cn, toIST } from '../lib/utils';
 import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit, Gift, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { AnalogClockPicker } from '../components/AnalogClockPicker';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { SketchPushPin } from '../components/SketchPushPin';
+import { HabitIcon } from '../components/HabitIcon';
 
 interface WeeklyCalendarProps {
   tasks: Task[];
+  habits?: Habit[];
   addTask: (task: Omit<Task, 'id'>) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string, deleteMode?: 'this' | 'following' | 'all') => void;
@@ -166,12 +168,13 @@ function formatTaskTimeRange(task: Task): string {
   return startTimeStr;
 }
 
-export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateTask, birthdays, onOpenBirthdays }: WeeklyCalendarProps) {
+export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, deleteTask, updateTask, birthdays, onOpenBirthdays }: WeeklyCalendarProps) {
   const [currentDate, setCurrentDate] = useState(toIST(new Date()));
   const [activePopoverPinId, setActivePopoverPinId] = useState<string | null>(null);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [pickerMonth, setPickerMonth] = useState<Date>(currentDate);
   const [now, setNow] = useState(toIST(new Date()));
+  const [isMinimizedView, setIsMinimizedView] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -394,6 +397,9 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
   // Empty height is 30px (shrunk to compress whitespace).
   const { hourHeights, hourTops, totalGridHeight } = React.useMemo(() => {
     const heights = Array.from({ length: 24 }, (_, hour) => {
+      if (isMinimizedView) {
+        return 22; // small size so the entire 24h fits clearly on one screen with good text legibility
+      }
       const hasTaskThisHour = weekDays.some(day => {
         return expandedTasksForWeek.some(t => {
           if (!t.deadline) return false;
@@ -424,7 +430,7 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
       hourTops: tops,
       totalGridHeight: currentTop,
     };
-  }, [expandedTasksForWeek, weekDays]);
+  }, [expandedTasksForWeek, weekDays, isMinimizedView]);
 
   const getNowYPosition = () => {
     const hh = now.getHours();
@@ -436,12 +442,18 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
 
   // Scroll to current hour on mount, adjust dynamically based on heights
   useEffect(() => {
+    if (isMinimizedView) {
+      if (gridRef.current) {
+        gridRef.current.scrollTop = 0;
+      }
+      return;
+    }
     if (gridRef.current && hourTops.length > 0) {
       const currentHour = toIST(new Date()).getHours();
       const targetTop = hourTops[currentHour] || 0;
       gridRef.current.scrollTop = targetTop - 100;
     }
-  }, [hourTops]);
+  }, [hourTops, isMinimizedView]);
 
   const handleNextWeek = () => setCurrentDate(addDays(currentDate, 7));
   const handlePrevWeek = () => setCurrentDate(addDays(currentDate, -7));
@@ -482,13 +494,24 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
   };
 
   return (
-    <div className="flex flex-col flex-1 h-[70vh] md:h-[75vh] min-h-[500px] bg-paper relative font-sans pb-12">
+    <div className={cn(
+      "flex flex-col flex-1 bg-paper relative font-sans pb-12 transition-all duration-300",
+      isMinimizedView ? "h-auto min-h-0" : "h-[70vh] md:h-[75vh] min-h-[500px]"
+    )}>
       {/* Header controls matching screenshot */}
-      <div className="flex justify-between items-end mb-4 pb-2 border-b-[6px] border-ink shrink-0 gap-2">
+      <div className="flex justify-between items-end mb-4 pb-3.5 md:pb-4 border-b-[6px] border-ink shrink-0 gap-2">
         <h2 className="font-sans text-3xl md:text-5xl font-black uppercase tracking-tighter leading-none flex flex-col min-w-0 relative">
-          <span>This</span>
-          <span>Week's</span>
-          <span>Transit</span>
+          <div 
+            onClick={() => setIsMinimizedView(!isMinimizedView)}
+            className="flex flex-col cursor-pointer group hover:text-[#EF4444] transition-colors select-none"
+            title="Click to toggle Full View scale mode"
+          >
+            <span>This</span>
+            <span>Week's</span>
+            <span className="text-subway-red group-hover:text-ink transition-colors mb-1">
+              Transit
+            </span>
+          </div>
           <div className="relative inline-block mt-1.5 max-w-full">
             <button 
               type="button"
@@ -662,24 +685,44 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col border-[6px] border-ink shadow-[6px_6px_0px_#1A1A1B] bg-paper overflow-x-auto overflow-y-hidden relative select-none">
-        <div className="min-w-[720px] md:min-w-full flex-1 flex flex-col">
+      <div className={cn(
+        "flex-1 flex flex-col border-[6px] border-ink shadow-[6px_6px_0px_#1A1A1B] bg-paper relative select-none",
+        isMinimizedView ? "overflow-hidden" : "overflow-x-auto overflow-y-hidden"
+      )}>
+        <div className={cn(
+          "flex-1 flex flex-col",
+          isMinimizedView ? "min-w-0 w-full" : "min-w-[720px] md:min-w-full"
+        )}>
           {/* Scrollable Time Grid */}
-          <div ref={gridRef} className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-hide">
+          <div 
+            ref={gridRef} 
+            className={cn(
+              "flex-1 relative scrollbar-hide",
+              isMinimizedView ? "overflow-hidden pointer-events-none" : "overflow-y-auto overflow-x-hidden"
+            )}
+          >
             
             {/* Week Days Header inside the scroll container to align perfectly */}
-            <div className="z-30 sticky top-0 shrink-0 bg-paper border-b-[4px] border-ink">
+            <div className={cn(
+              "z-30 sticky top-0 shrink-0 bg-paper",
+              isMinimizedView ? "border-b border-ink" : "border-b-[4px] border-ink"
+            )}>
               <div className="flex border-b border-ink/40">
-                <div className="w-14 md:w-16 border-r-[4px] border-ink flex flex-col items-center justify-center py-1 md:py-2 px-1 shrink-0 bg-paper sticky left-0 z-40 block-decor">
-                  <span className="font-mono text-[8px] uppercase font-bold tracking-widest leading-none text-center">IST</span>
-                  <button 
-                    type="button" 
-                    onClick={() => handleOpenCreatePin()}
-                    className="mt-1 px-1 py-0.5 border-2 border-ink font-mono text-[5.5px] md:text-[7px] uppercase font-black bg-taxi hover:bg-taxi/90 text-ink shadow-[1.1px_1.1px_0px_#1A1A1B] hover:translate-y-[-0.5px] active:shadow-none active:translate-x-[0.5px] active:translate-y-[0.5px] transition-all select-none cursor-pointer leading-none shrink-0"
-                    title="Anchor a new time section pin"
-                  >
-                    + PIN
-                  </button>
+                <div className={cn(
+                  "flex flex-col items-center justify-center px-1 shrink-0 bg-paper sticky left-0 z-40 block-decor",
+                  isMinimizedView ? "w-10 border-r border-ink py-1" : "w-14 md:w-16 border-r-[4px] border-ink py-1 md:py-2"
+                )}>
+                  <span className={cn("font-mono font-bold tracking-widest leading-none text-center", isMinimizedView ? "text-[6px]" : "text-[8px] uppercase")}>IST</span>
+                  {!isMinimizedView && (
+                    <button 
+                      type="button" 
+                      onClick={() => handleOpenCreatePin()}
+                      className="mt-1 px-1 py-0.5 border-2 border-ink font-mono text-[5.5px] md:text-[7px] uppercase font-black bg-taxi hover:bg-taxi/90 text-ink shadow-[1.1px_1.1px_0px_#1A1A1B] hover:translate-y-[-0.5px] active:shadow-none active:translate-x-[0.5px] active:translate-y-[0.5px] transition-all select-none cursor-pointer leading-none shrink-0"
+                      title="Anchor a new time section pin"
+                    >
+                      + PIN
+                    </button>
+                  )}
                 </div>
                 <div className="flex-1 grid grid-cols-7">
                   {weekDays.map((day, dayIndex) => {
@@ -697,19 +740,28 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                       <div 
                         key={day.toISOString()} 
                         onClick={() => {
+                          if (isMinimizedView) return;
                           const formattedDate = format(day, 'yyyy-MM-dd');
                           handleCreateAtSlot(formattedDate, '10:30', '11:30');
                         }}
                         className={cn(
-                          "border-r-[4px] border-ink p-1 md:p-3 text-center flex flex-col items-center justify-center relative cursor-pointer hover:bg-paper-dark transition-colors select-none min-h-[55px]", 
+                          "text-center flex flex-col items-center justify-center relative select-none", 
+                          isMinimizedView 
+                            ? "p-0.5 border-r border-ink/20 min-h-[32px] cursor-default" 
+                            : "border-r-[4px] border-ink p-1 md:p-3 min-h-[55px] cursor-pointer hover:bg-paper-dark transition-colors",
                           today ? "bg-taxi text-ink hover:bg-taxi-hover" : "bg-transparent",
                           dayIndex === 6 ? "border-r-0" : ""
                         )}
-                        title="Click header to schedule dispatch on this date"
+                        title={isMinimizedView ? undefined : "Click header to schedule dispatch on this date"}
                       >
-                        <span className="font-mono text-[8px] md:text-[10px] font-bold uppercase tracking-widest">{format(day, 'EEE')}</span>
-                        <span className={cn("font-sans text-lg md:text-3xl font-black mt-1", today ? "text-ink" : "text-ink")}>{format(day, 'd')}</span>
-                        {dayBirthdays.length > 0 && (
+                        <span className={cn("font-mono font-bold uppercase tracking-widest leading-none", isMinimizedView ? "text-[6px]" : "text-[8px] md:text-[10px]")}>{format(day, 'EEE')}</span>
+                        <div className="flex items-center gap-0.5 mt-0.5">
+                          <span className={cn("font-sans font-black mt-1 leading-none", isMinimizedView ? "text-[11px]" : "text-lg md:text-3xl")}>{format(day, 'd')}</span>
+                          {isMinimizedView && dayBirthdays.length > 0 && (
+                            <span className="text-[7.5px]" title={`${dayBirthdays.length} birthday(s)`}>🎂</span>
+                          )}
+                        </div>
+                        {!isMinimizedView && dayBirthdays.length > 0 && (
                           <div className="mt-1 flex flex-col gap-1 w-full items-center px-1">
                             {dayBirthdays.map(b => (
                               <div 
@@ -726,7 +778,7 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                             ))}
                           </div>
                         )}
-                        {today && <div className="absolute top-1 left-1 w-2 h-2 rounded-full bg-subway-red animate-pulse" title="Current Station" />}
+                        {today && <div className={cn("absolute rounded-full bg-subway-red animate-pulse", isMinimizedView ? "top-0.5 right-0.5 w-1 h-1" : "top-1 left-1 w-2 h-2")} title="Current Station" />}
                       </div>
                     );
                   })}
@@ -736,14 +788,17 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
               {/* Multi-day / All-day Tasks spanning multiple days */}
               {multiDayTasksForWeek.length > 0 && (
                 <div className="flex bg-paper-dark border-t border-ink shrink-0 relative">
-                  <div className="w-14 md:w-16 border-r-[4px] border-ink flex flex-col items-center justify-center p-1 shrink-0 bg-paper sticky left-0 z-40">
+                  <div className={cn(
+                    "flex flex-col items-center justify-center p-1 shrink-0 bg-paper sticky left-0 z-40",
+                    isMinimizedView ? "w-10 border-r border-ink" : "w-14 md:w-16 border-r-[4px] border-ink"
+                  )}>
                     <span className="font-mono text-[7px] uppercase font-black text-ink/50 tracking-wider text-center leading-none">SPAN</span>
                   </div>
                   <div className="flex-1 relative py-1 min-h-[36px] bg-paper/30 flex flex-col justify-center">
                     {/* Background grid indicators */}
                     <div className="absolute inset-0 grid grid-cols-7 pointer-events-none">
                       {Array.from({ length: 7 }).map((_, idx) => (
-                        <div key={idx} className={cn("border-r-[4px] border-ink/10 h-full", idx === 6 ? "border-r-0" : "")} />
+                        <div key={idx} className={cn("h-full", isMinimizedView ? "border-r border-ink/10" : "border-r-[4px] border-ink/10", idx === 6 ? "border-r-0" : "")} />
                       ))}
                     </div>
                     
@@ -774,6 +829,7 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                           <div
                             key={task.id}
                             onClick={(e) => {
+                              if (isMinimizedView) return;
                               e.stopPropagation();
                               setSelectedTask(task);
                             }}
@@ -782,7 +838,10 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                               width: `calc(${widthPct}% - 6px)`,
                             }}
                             className={cn(
-                              "border-[2px] border-ink px-1.5 py-0.5 rounded-sm shadow-[1.5px_1.5px_0px_#1A1A1B] cursor-pointer hover:translate-y-[-0.5px] hover:shadow-[2.5px_2.5px_0px_#1A1A1B] transition-all select-none text-left relative overflow-hidden",
+                              "border rounded-none select-none text-left relative overflow-hidden transition-all",
+                              isMinimizedView 
+                                ? "border-ink px-1 py-0.5 shadow-[1px_1px_0px_#1A1A1B] text-[6px]" 
+                                : "border-[2px] border-ink px-1.5 py-0.5 shadow-[1.5px_1.5px_0px_#1A1A1B] cursor-pointer hover:translate-y-[-0.5px] hover:shadow-[2.5px_2.5px_0px_#1A1A1B]",
                               getEventColor(task)
                             )}
                           >
@@ -790,14 +849,19 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                               "absolute left-0 top-0 bottom-0 w-1",
                               task.status === 'done' ? "bg-ink/10" : (task.priority === 'urgent' ? "bg-subway-red" : task.priority === 'medium' ? "bg-taxi" : "bg-ink/30")
                             )} />
-                            <div className="flex items-center justify-between text-[9px] pl-1.5 font-bold uppercase leading-tight tracking-tight">
-                              <span className="truncate max-w-[70%]">
+                            <div className={cn(
+                              "flex items-center justify-between pl-1 font-bold uppercase leading-tight tracking-tight",
+                              isMinimizedView ? "text-[6px]" : "text-[9px]"
+                            )}>
+                              <span className="truncate max-w-[75%]">
                                 {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse">⚡</span>}
                                 <span className={cn(task.status === 'done' && "line-through opacity-50")}>{task.title}</span>
                               </span>
-                              <span className="font-mono text-[6.5px] font-semibold opacity-70 ml-1 shrink-0 bg-ink/5 px-1 rounded-xs">
-                                {format(taskStart, 'MMM d, h:mm a')} — {format(taskEnd, 'MMM d, h:mm a')}
-                              </span>
+                              {!isMinimizedView && (
+                                <span className="font-mono text-[6.5px] font-semibold opacity-70 ml-1 shrink-0 bg-ink/5 px-1 rounded-xs">
+                                  {format(taskStart, 'MMM d, h:mm a')} — {format(taskEnd, 'MMM d, h:mm a')}
+                                </span>
+                              )}
                             </div>
                           </div>
                         );
@@ -812,7 +876,10 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
               
               {/* Time Labels Rail with integrated Custom Pins & Side Sections on the left */}
               <div 
-                className="w-14 md:w-16 shrink-0 border-r-[4px] border-ink bg-[#FAF8F2] sticky left-0 z-20 group/timerail relative"
+                className={cn(
+                  "shrink-0 bg-[#FAF8F2] sticky left-0 z-20 group/timerail relative",
+                  isMinimizedView ? "w-10 border-r border-ink" : "w-14 md:w-16 border-r-[4px] border-ink"
+                )}
                 style={{ height: `${totalGridHeight}px` }}
               >
                 {/* Clickable slot on each hour to anchor a pin */}
@@ -820,20 +887,28 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                   {hours.map(hour => (
                     <div
                       key={hour}
-                      onClick={() => handleOpenCreatePin(hour)}
-                      className="w-full hover:bg-black/5 cursor-pointer border-b border-dashed border-ink/5 flex items-end justify-start p-1 transition-all group/timehour"
+                      onClick={() => {
+                        if (isMinimizedView) return;
+                        handleOpenCreatePin(hour);
+                      }}
+                      className={cn(
+                        "w-full flex items-end justify-start p-1 transition-all group/timehour",
+                        isMinimizedView ? "cursor-default border-b border-dashed border-ink/5" : "hover:bg-black/5 cursor-pointer border-b border-dashed border-ink/5"
+                      )}
                       style={{ height: `${hourHeights[hour]}px` }}
-                      title={`Click here to anchor section starting at ${hour}:00`}
+                      title={isMinimizedView ? undefined : `Click here to anchor section starting at ${hour}:00`}
                     >
-                      <span className="font-mono text-[5px] md:text-[6px] font-black text-ink/30 opacity-0 group-hover/timehour:opacity-100 transition-opacity uppercase tracking-tighter leading-none select-none pl-3 pb-1">
-                        + PIN
-                      </span>
+                      {!isMinimizedView && (
+                        <span className="font-mono text-[5px] md:text-[6px] font-black text-ink/30 opacity-0 group-hover/timehour:opacity-100 transition-opacity uppercase tracking-tighter leading-none select-none pl-3 pb-1">
+                          + PIN
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
 
                 {/* Drawn Section side indicators & Pins inside Time Labels Rail */}
-                {timePins.map((pin, idx) => {
+                {!isMinimizedView && timePins.map((pin, idx) => {
                   const startBaseTop = hourTops[pin.startHour] || 0;
                   const startHourHeight = hourHeights[pin.startHour] || 85;
                   const startTop = startBaseTop + (pin.startMinute / 60) * startHourHeight;
@@ -936,12 +1011,17 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                   {hours.map(hour => (
                     <div 
                       key={hour} 
-                      className="border-b-2 border-dashed border-ink/20 flex justify-end items-start pr-1 relative"
+                      className={cn(
+                        "flex justify-end items-start pr-1 relative",
+                        isMinimizedView ? "border-b border-dashed border-ink/5" : "border-b-2 border-dashed border-ink/20"
+                      )}
                       style={{ height: `${hourHeights[hour]}px` }}
                     >
                       <span className={cn(
-                        "font-mono text-[8px] md:text-[9.5px] font-black uppercase tracking-tighter bg-transparent px-1 mt-1 z-10 leading-none transition-all mr-1",
-                        hourHeights[hour] === 30 ? "text-ink/30 scale-[0.8] origin-right" : "text-ink/60"
+                        "font-mono uppercase tracking-tighter bg-transparent px-1 mt-0.5 z-10 leading-none transition-all mr-0.5",
+                        isMinimizedView 
+                          ? "text-ink/45 text-[7.5px]" 
+                          : hourHeights[hour] === 30 ? "text-ink/30 text-[8px] md:text-[9.5px] scale-[0.8] origin-right" : "text-ink/60 text-[8px] md:text-[9.5px]"
                       )}>
                         {format(toIST(new Date()).setHours(hour, 0, 0, 0), 'ha')}
                       </span>
@@ -951,7 +1031,10 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
               </div>
 
               {/* Overlay Horizontal Pin Lines spanning across the entire width of week columns */}
-              <div className="absolute inset-y-0 left-[56px] md:left-[64px] right-0 pointer-events-none z-10 overflow-hidden">
+              <div className={cn(
+                "absolute inset-y-0 right-0 pointer-events-none z-10 overflow-hidden",
+                isMinimizedView ? "left-[40px]" : "left-[56px] md:left-[64px]"
+              )}>
                 {(() => {
                   const lines: Array<{
                     id: string;
@@ -1036,7 +1119,10 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                   {hours.map(hour => (
                     <div 
                       key={hour} 
-                      className="border-b-2 border-dashed border-ink/20 w-full shrink-0" 
+                      className={cn(
+                        "w-full shrink-0",
+                        isMinimizedView ? "border-b border-dashed border-ink/10" : "border-b-2 border-dashed border-ink/20"
+                      )} 
                       style={{ height: `${hourHeights[hour]}px` }}
                     />
                   ))}
@@ -1056,10 +1142,17 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                   const dayLayouts = getEventLayouts(dayTasks, hourTops, hourHeights);
                   
                   return (
-                    <div key={day.toISOString()} className={cn("relative border-r-[4px] border-ink/40 group/col", dayIndex === 6 ? "border-r-0" : "")}>
+                    <div key={day.toISOString()} className={cn(
+                      "relative group/col",
+                      isMinimizedView ? "border-r border-ink/10" : "border-r-[4px] border-ink/40",
+                      dayIndex === 6 ? "border-r-0" : ""
+                    )}>
                       {/* Interactive Hour slots background for clicking to add task */}
-                      <div className="absolute inset-0 flex flex-col pointer-events-auto">
-                        {hours.map(hour => (
+                      <div className={cn(
+                        "absolute inset-0 flex flex-col pointer-events-auto",
+                        isMinimizedView && "pointer-events-none"
+                      )}>
+                        {!isMinimizedView && hours.map(hour => (
                           <div
                             key={hour}
                             onClick={() => {
@@ -1096,32 +1189,45 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                           <div 
                             key={task.id}
                             onClick={(e) => {
+                              if (isMinimizedView) return;
                               e.stopPropagation();
                               setSelectedTask(task);
                             }}
                             className={cn(
-                              "absolute z-10 border-[3px] overflow-hidden shadow-[2px_2px_0px_#1A1A1B] cursor-pointer hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_#1A1A1B] transition-all select-none",
-                              isVerySmall ? "p-0.5" : isMediumSmall ? "p-1" : "p-1.5",
-                              getEventColor(task)
+                              "absolute z-10 overflow-hidden transition-all select-none border-ink",
+                              isMinimizedView 
+                                ? "border p-[1.2px] text-[6.5px] shadow-none cursor-default leading-none"
+                                : cn("border-[3px] shadow-[2px_2px_0px_#1A1A1B] cursor-pointer hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_#1A1A1B]", isVerySmall ? "p-0.5" : isMediumSmall ? "p-1" : "p-1.5"),
+                              getEventColor(task),
+                              task.status === 'in-progress' && "animate-doing-pulse"
                             )}
                             style={style}
                           >
                             {/* Priority Indicator Line on Left Side */}
                             <div className={cn(
-                              "absolute left-0 top-0 bottom-0 w-1",
+                              "absolute left-0 top-0 bottom-0",
+                              isMinimizedView ? "w-0.5" : "w-1",
                               task.status === 'done' ? "bg-ink/10" : (task.priority === 'urgent' ? "bg-subway-red" : task.priority === 'medium' ? "bg-taxi" : "bg-ink/30")
                             )} />
 
-                            <div className={cn(
-                              "flex flex-col h-full pl-1",
-                              isVerySmall ? "justify-center" : "justify-between py-0.5 pb-0.5"
-                            )}>
-                              {isVerySmall ? (
-                                <div className="flex items-center justify-between gap-1 w-full text-[7px] md:text-[8px] font-black uppercase text-ink leading-none">
-                                  <span className="truncate pr-1">
-                                    {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
-                                    {task.title}
-                                  </span>
+                            {isMinimizedView ? (
+                              <div className="flex items-center h-full pl-[3.5px] pr-1 text-[6.5px] font-black uppercase text-ink overflow-hidden select-none leading-none">
+                                <span className="truncate w-full block">
+                                  {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
+                                  {task.title}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className={cn(
+                                "flex flex-col h-full pl-1",
+                                isVerySmall ? "justify-center" : "justify-between py-0.5 pb-0.5"
+                              )}>
+                                {isVerySmall ? (
+                                  <div className="flex items-center justify-between gap-1 w-full text-[7px] md:text-[8px] font-black uppercase text-ink leading-none">
+                                    <span className="truncate pr-1">
+                                      {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
+                                      {task.title}
+                                    </span>
                                   {task.title.length < 10 && task.deadline && (
                                     <span className="font-mono text-[6px] md:text-[7px] font-extrabold opacity-60 shrink-0">
                                       {format(new Date(task.deadline), 'H:mm')}
@@ -1202,13 +1308,27 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                                 </>
                               )}
                             </div>
-                          </div>
+                          )}
+                        </div>
                       );})}
 
                       {/* Real-time Current Position indicator line & badges */}
                       {(() => {
                         const isToday = isSameDay(day, now);
-                        return isToday && (
+                        if (!isToday) return null;
+                        if (isMinimizedView) {
+                          return (
+                            <div 
+                              className="absolute left-0 right-0 z-30 pointer-events-none flex items-center"
+                              style={{ top: `${getNowYPosition()}px`, transform: 'translateY(-50%)' }}
+                            >
+                              <div className="w-full relative flex items-center">
+                                <div className="absolute inset-x-0 h-[1.2px] bg-subway-red/60" />
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
                           <div 
                             className="absolute left-0 right-0 z-30 pointer-events-none flex items-center"
                             style={{ top: `${getNowYPosition()}px`, transform: 'translateY(-50%)' }}
@@ -1229,6 +1349,86 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
                           </div>
                         );
                       })()}
+
+                      {/* Render Habits for current Day */}
+                      {(() => {
+                        const dayOfWeek = day.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+                        const dayHabits = habits.filter(habit => {
+                          const freq = habit.frequency || 'daily';
+                          if (freq === 'daily') {
+                            return true;
+                          } else if (freq === 'weekdays') {
+                            return dayOfWeek >= 1 && dayOfWeek <= 5;
+                          } else if (freq === 'weekends') {
+                            return dayOfWeek === 0 || dayOfWeek === 6;
+                          } else if (freq === 'weekly' || freq === 'custom') {
+                            if (habit.daysOfWeek && habit.daysOfWeek.length > 0) {
+                              return habit.daysOfWeek.includes(dayOfWeek);
+                            }
+                            return true;
+                          }
+                          return true;
+                        });
+
+                        return dayHabits.map((habit) => {
+                          const hHour = habit.hour !== undefined ? habit.hour : 8;
+                          const hMin = habit.minute !== undefined ? habit.minute : 0;
+                          
+                          const baseTop = hourTops[hHour] || 0;
+                          const hourHeight = hourHeights[hHour] || 85;
+                          const top = baseTop + (hMin / 60) * hourHeight;
+                          
+                          const dateStr = format(day, 'yyyy-MM-dd');
+                          const isCompleted = !!habit.history?.[dateStr];
+
+                          return (
+                            <div
+                              key={`calendar-habit-${habit.id}-${dateStr}`}
+                              className={cn(
+                                "absolute z-20 pointer-events-auto select-none",
+                                isMinimizedView ? "right-0.5" : "right-1"
+                              )}
+                              style={{
+                                top: `${top}px`,
+                                transform: 'translateY(-50%)',
+                                width: 'auto',
+                                maxWidth: '95%',
+                              }}
+                              title={`Habit Station: ${habit.name} (${isCompleted ? 'Completed' : 'Pending'})`}
+                            >
+                              <div 
+                                className={cn(
+                                  "flex items-center select-none font-mono font-black leading-none uppercase tracking-tight",
+                                  isMinimizedView
+                                    ? "gap-[1px] border border-ink/80 py-0 px-[2.5px] rounded-full shadow-none text-[4.5px]"
+                                    : "gap-1 border-2 border-ink px-1.5 py-0.5 rounded-full shadow-[1.5px_1.5px_0px_#1A1A1B] text-[8px] md:text-[9.5px]",
+                                  isCompleted 
+                                    ? (isMinimizedView 
+                                        ? "bg-emerald-500 text-white border-emerald-600 font-extrabold" 
+                                        : "bg-[#D1FAE5] text-emerald-950 border-emerald-500 shadow-[1px_1px_0px_rgba(16,185,129,1)]") 
+                                    : "bg-paper text-ink"
+                                )}
+                                style={(!isCompleted && habit.color) ? { backgroundColor: `${habit.color}F0` } : undefined}
+                              >
+                                <HabitIcon iconName={habit.icon || '📍'} size={isMinimizedView ? 6 : 10} className="shrink-0" />
+                                <span className={cn(
+                                  "truncate",
+                                  isMinimizedView ? "max-w-[14px] text-[4px] tracking-widest leading-none" : "max-w-[45px] md:max-w-[65px] tracking-tight",
+                                  isCompleted && "line-through opacity-60"
+                                )}>
+                                  {habit.name}
+                                </span>
+                                
+                                {/* Tiny transit connection dot */}
+                                <div className={cn(
+                                  isMinimizedView ? "w-0.5 h-0.5 border-[0.3px] border-ink ml-[0.5px] shrink-0 rounded-full" : "w-1.5 h-1.5 border border-ink ml-0.5 shrink-0 rounded-full",
+                                  isCompleted ? "bg-emerald-200 border-emerald-300" : "bg-white"
+                                )} />
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   );
                 })}
@@ -1237,6 +1437,16 @@ export function WeeklyCalendar({ tasks, addTask, toggleTask, deleteTask, updateT
             </div>
           </div>
         </div>
+        {isMinimizedView && (
+          <div className="bg-ink text-paper font-mono text-[8px] md:text-[9.5px] py-2 px-4 uppercase tracking-widest font-black flex items-center justify-between border-t-[4px] border-ink shrink-0 select-none">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse border border-emerald-300" /> 
+              SCALE VIEW ACCORDING TO SCREEN WIDTH
+            </span>
+            <span className="opacity-70 hidden sm:inline">- VIEW ONLY -</span>
+            <span className="text-taxi">CLICK "THIS WEEK'S TRANSIT" TO EXIT</span>
+          </div>
+        )}
       </div>
 
       {/* Floating Action Button */}
