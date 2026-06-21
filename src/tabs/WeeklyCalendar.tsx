@@ -212,13 +212,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
     } catch (e) {
       console.error(e);
     }
-    // High-value, beautifully styled vintage default presets matching daily dispatcher roles
-    return [
-      { id: '1', name: 'Morning Docket', startHour: 7, startMinute: 0, endHour: 9, endMinute: 30, color: '#F7C331' }, // Taxi Yellow
-      { id: '2', name: 'Deep Work Sprint', startHour: 10, startMinute: 0, endHour: 13, endMinute: 0, color: '#EF4444' }, // Subway Red
-      { id: '3', name: 'Recess Interlude', startHour: 13, startMinute: 0, endHour: 14, endMinute: 30, color: '#10B981' }, // Neon Teal
-      { id: '4', name: 'Evening Dispatch', startHour: 17, startMinute: 0, endHour: 18, endMinute: 30, color: '#3B82F6' } // Subway Blue
-    ];
+    return [];
   });
 
   useEffect(() => {

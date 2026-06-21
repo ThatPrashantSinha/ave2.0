@@ -18,22 +18,7 @@ const NOTE_COLORS = [
   { name: 'Desert Sun', hex: '#FFF7ED', text: 'text-orange-900' }
 ];
 
-const SEED_NOTES: NotePage[] = [
-  {
-    id: 'soho-loft',
-    title: 'THE SOHO LOFT PROJECT',
-    content: 'DISCUSSED THE NEW GALLERY SPACE WITH MARTHA. THE NEIGHBORHOOD IS CHANGING INDEED. WE NEED MORE SHELVING IN THE SOUTHERN ALCOVE BY NOVEMBER.',
-    color: '#FCFAF5',
-    updatedAt: '1974-10-12T10:30:00.000Z'
-  },
-  {
-    id: 'rainy-morning',
-    title: 'RAINY MORNING NOTES',
-    content: 'WATCHING THE YELLOW CABS SPLASH THROUGH PUDDLES FROM THE FIRE ESCAPE. STACK OF DRIZZLE REPORTS IS PILING UP AT THE DISPATCH CONSOLE.',
-    color: '#FEF9C3',
-    updatedAt: '1974-10-11T08:15:00.000Z'
-  }
-];
+const SEED_NOTES: NotePage[] = [];
 
 export function NotesWidget() {
   const [notes, setNotes] = useState<NotePage[]>([]);
@@ -156,19 +141,19 @@ export function NotesWidget() {
           setNotes(parsed);
           setSelectedId(parsed[0].id);
         } else {
-          setNotes(SEED_NOTES);
-          setSelectedId(SEED_NOTES[0].id);
-          localStorage.setItem('daily_docket_notes_pages', JSON.stringify(SEED_NOTES));
+          setNotes([]);
+          setSelectedId('');
+          localStorage.setItem('daily_docket_notes_pages', JSON.stringify([]));
         }
       } catch (e) {
         console.error('Failed to parse notes:', e);
-        setNotes(SEED_NOTES);
-        setSelectedId(SEED_NOTES[0].id);
+        setNotes([]);
+        setSelectedId('');
       }
     } else {
-      setNotes(SEED_NOTES);
-      setSelectedId(SEED_NOTES[0].id);
-      localStorage.setItem('daily_docket_notes_pages', JSON.stringify(SEED_NOTES));
+      setNotes([]);
+      setSelectedId('');
+      localStorage.setItem('daily_docket_notes_pages', JSON.stringify([]));
     }
   }, []);
 
@@ -220,27 +205,11 @@ export function NotesWidget() {
 
   const handleDeletePage = (idToDelete: string) => {
     const remaining = notes.filter(n => n.id !== idToDelete);
-    if (remaining.length === 0) {
-      // Re-seed if completely empty to preserve gorgeous look
-      const reset = [
-        {
-          id: Math.random().toString(36).substring(7),
-          title: 'NEW LEDGER ENTRY',
-          content: '',
-          color: '#FCFAF5',
-          updatedAt: new Date().toISOString()
-        }
-      ];
-      setNotes(reset);
-      setSelectedId(reset[0].id);
-      syncToStorage(reset);
-    } else {
-      setNotes(remaining);
-      if (selectedId === idToDelete) {
-        setSelectedId(remaining[0].id);
-      }
-      syncToStorage(remaining);
+    setNotes(remaining);
+    if (selectedId === idToDelete) {
+      setSelectedId(remaining.length > 0 ? remaining[0].id : '');
     }
+    syncToStorage(remaining);
   };
 
   const handleCopyToClipboard = () => {
