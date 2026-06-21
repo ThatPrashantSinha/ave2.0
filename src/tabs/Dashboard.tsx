@@ -6,6 +6,7 @@ import { cn, toIST } from '../lib/utils';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { HabitIcon } from '../components/HabitIcon';
 import { SubwayTransitIcon } from '../components/SubwayTransitIcon';
+import { NotesWidget } from '../components/NotesWidget';
 
 // Accurate dynamic habit statistics calculator matching transit-themed custom days
 export function getHabitStats(habit: Habit, todayDate: Date) {
@@ -88,6 +89,99 @@ export function getHabitStats(habit: Habit, todayDate: Date) {
     currentStreak,
     completionRate30
   };
+}
+
+// Calculates combined streak of completed tasks & habits on consecutive calendar days
+export function getCombinedStreak(tasks: Task[], habits: Habit[], todayDate: Date): number {
+  if (tasks.length === 0 && habits.length === 0) return 0;
+
+  const getDayInfo = (d: Date) => {
+    const dStr = format(d, 'yyyy-MM-dd');
+    
+    // Only get task occurrences that are scheduled for this day
+    const occurrences = getOccurrencesForDateRange(tasks, d, d).filter(task => {
+      if (task.recurring && task.recurring !== 'none') {
+        return true;
+      }
+      if (task.deadline) {
+        return isSameDay(new Date(task.deadline), d);
+      }
+      // For backlog/inbox tasks, only include them when checking today because they appear on the active daily list
+      if (isSameDay(d, todayDate)) {
+        return true;
+      }
+      return false;
+    });
+
+    const completedT = occurrences.filter(t => t.status === 'done');
+    
+    const dayOfWeek = d.getDay();
+    const scheduledH = habits.filter(habit => {
+      const freq = habit.frequency || 'daily';
+      if (freq === 'daily') return true;
+      if (freq === 'weekdays') return dayOfWeek >= 1 && dayOfWeek <= 5;
+      if (freq === 'weekends') return dayOfWeek === 0 || dayOfWeek === 6;
+      if (freq === 'weekly' || freq === 'custom') {
+        if (habit.daysOfWeek && habit.daysOfWeek.length > 0) {
+          return habit.daysOfWeek.includes(dayOfWeek);
+        }
+      }
+      return true;
+    });
+    
+    const completedH = scheduledH.filter(h => !!h.history?.[dStr]);
+    const total = occurrences.length + scheduledH.length;
+    const completed = completedT.length + completedH.length;
+
+    return {
+      total,
+      completed,
+      isFullyCompleted: total > 0 ? (completed === total) : true,
+      hasTasksOrHabits: total > 0
+    };
+  };
+
+  const yesterdayDate = new Date(todayDate);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+
+  const todayInfo = getDayInfo(todayDate);
+  const yesterdayInfo = getDayInfo(yesterdayDate);
+
+  let checkDate = new Date(todayDate);
+
+  if (todayInfo.hasTasksOrHabits && todayInfo.isFullyCompleted) {
+    checkDate = new Date(todayDate);
+  } else if (yesterdayInfo.hasTasksOrHabits && yesterdayInfo.isFullyCompleted) {
+    checkDate = new Date(yesterdayDate);
+  } else {
+    if (todayInfo.total === 0 && yesterdayInfo.isFullyCompleted && yesterdayInfo.hasTasksOrHabits) {
+      checkDate = new Date(yesterdayDate);
+    } else {
+      return 0;
+    }
+  }
+
+  let streak = 0;
+  let activeDaysCount = 0;
+
+  for (let j = 0; j < 365; j++) {
+    const info = getDayInfo(checkDate);
+    if (info.hasTasksOrHabits) {
+      if (info.isFullyCompleted) {
+        streak++;
+        activeDaysCount++;
+      } else {
+        break; // Streak broken
+      }
+    } else {
+      // Resting/empty day: continue consecutive day streak without breaking
+      streak++;
+    }
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  if (activeDaysCount === 0) return 0;
+  return streak;
 }
 
 export function Dashboard({ 
@@ -259,6 +353,7 @@ export function Dashboard({
   const totalDailyItems = todayOccurrences.length + todayHabits.length;
   const completedDailyItems = completedTasks.length + todayCompletedHabits.length;
   const progressPercent = totalDailyItems > 0 ? Math.round((completedDailyItems / totalDailyItems) * 100) : 0;
+  const combinedStreak = getCombinedStreak(tasks, habits, today);
 
   const sortedTodayHabits = [...todayHabits].sort((a, b) => {
     const aHour = a.hour !== undefined ? a.hour : 8;
@@ -629,13 +724,24 @@ export function Dashboard({
               <p className="font-mono text-[8px] font-bold uppercase text-ink-light tracking-wider mt-0.5">Unified Docket & Habit Dispatch Monitor</p>
             </div>
             {/* Visual Digital Display */}
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end gap-1.5">
               <span className="font-mono text-[11px] font-black text-ink-light bg-ink/5 px-1.5 py-0.5 rounded leading-none select-none">
                 {completedDailyItems} / {totalDailyItems} STOPS
               </span>
-              <span className="font-mono text-[7px] text-[#22C55E] font-black tracking-widest uppercase mt-0.5 select-none animate-pulse">
-                {progressPercent}% EFFICIENT
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                {combinedStreak > 0 ? (
+                  <span className="font-mono text-[8.5px] font-black text-[#EF4444] bg-[#EF4444]/10 border border-[#EF4444]/30 px-1.5 py-0.5 rounded flex items-center gap-0.5 select-none animate-pulse">
+                    🔥 STREAK: {combinedStreak}D
+                  </span>
+                ) : (
+                  <span className="font-mono text-[8px] font-black text-ink/30 bg-ink/5 px-1.5 py-0.5 rounded select-none">
+                    💤 NO STREAK
+                  </span>
+                )}
+                <span className="font-mono text-[7px] text-[#22C55E] font-black tracking-widest uppercase select-none animate-pulse">
+                  {progressPercent}% EFFICIENT
+                </span>
+              </div>
             </div>
           </div>
 
@@ -710,8 +816,11 @@ export function Dashboard({
                   <Gauge size={10} className="text-ink-light" strokeWidth={2.5} />
                   LINE: LOCAL-8 EXPRESS
                 </span>
+                <span className="flex items-center gap-1 font-sans font-black text-ink select-none">
+                  <Flame size={11} className={cn("inline shrink-0", combinedStreak > 0 ? "text-subway-red animate-pulse" : "text-ink/20")} />
+                  STREAK: {combinedStreak}D
+                </span>
                 <span>{progressPercent}% ARRIVED</span>
-                <span className="opacity-75">TERM: TODAY</span>
               </div>
             </div>
           ) : (
@@ -1551,21 +1660,7 @@ export function Dashboard({
       {/* Column 3: Focus & Extras */}
       <div className="md:col-span-3 space-y-6">
         
-        <div className="border-[6px] border-ink p-4 bg-paper shadow-[4px_4px_0px_#1A1A1B]">
-          <h3 className="font-sans font-black uppercase tracking-tight text-lg border-b border-ink pb-2 mb-3">The Archive</h3>
-          <ul className="space-y-4">
-            <li>
-              <div className="font-mono text-[10px] font-bold uppercase opacity-60">OCT 12, 1974</div>
-              <h4 className="font-sans font-black uppercase text-sm mt-1">The Soho Loft Project</h4>
-              <p className="font-mono font-bold uppercase text-[9px] mt-1 opacity-60 line-clamp-2">Discussed the new gallery space with Martha. The neighborhood is changing...</p>
-            </li>
-             <li>
-              <div className="font-mono text-[10px] font-bold uppercase opacity-60">OCT 11, 1974</div>
-              <h4 className="font-sans font-black uppercase text-sm mt-1">Rainy Morning Notes</h4>
-              <p className="font-mono font-bold uppercase text-[9px] mt-1 opacity-60 line-clamp-2">Watching the yellow cabs splash through puddles from the fire escape.</p>
-            </li>
-          </ul>
-        </div>
+        <NotesWidget />
 
       </div>
     </div>

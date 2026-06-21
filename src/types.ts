@@ -43,3 +43,11 @@ export interface Birthday {
   date: string; // YYYY-MM-DD
 }
 
+export interface NotePage {
+  id: string;
+  title: string;
+  content: string;
+  color: string; // Tailwind bg color class or hex code
+  updatedAt: string; // date string
+}
+
