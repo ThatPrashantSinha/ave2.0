@@ -55,6 +55,13 @@ export function useStore() {
       const dbHabits = await getHabitsFromDB();
       setTasks(dbTasks);
       setHabits(dbHabits);
+      
+      const stored = localStorage.getItem('daily_docket_birthdays');
+      if (stored) {
+        setBirthdays(JSON.parse(stored));
+      } else {
+        setBirthdays([]);
+      }
     } catch (e) {
       console.error('Failed to load data from IndexedDB:', e);
     } finally {
