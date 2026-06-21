@@ -879,8 +879,16 @@ export function Dashboard({
                 </div>
               ) : (
                 <div className="space-y-4 max-h-[300px] overflow-y-auto pr-0.5 custom-scrollbar">
-                  {habits.map((habit) => {
-                    const stats = getHabitStats(habit, today);
+                  {[...habits]
+                    .sort((a, b) => {
+                      const aH = a.hour !== undefined ? a.hour : 8;
+                      const aM = a.minute !== undefined ? a.minute : 0;
+                      const bH = b.hour !== undefined ? b.hour : 8;
+                      const bM = b.minute !== undefined ? b.minute : 0;
+                      return (aH * 60 + aM) - (bH * 60 + bM);
+                    })
+                    .map((habit) => {
+                      const stats = getHabitStats(habit, today);
                     
                     return (
                       <div 
@@ -1453,8 +1461,16 @@ export function Dashboard({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  {habits.map((habit) => {
-                    const stats = getHabitStats(habit, today);
+                  {[...habits]
+                    .sort((a, b) => {
+                      const aH = a.hour !== undefined ? a.hour : 8;
+                      const aM = a.minute !== undefined ? a.minute : 0;
+                      const bH = b.hour !== undefined ? b.hour : 8;
+                      const bM = b.minute !== undefined ? b.minute : 0;
+                      return (aH * 60 + aM) - (bH * 60 + bM);
+                    })
+                    .map((habit) => {
+                      const stats = getHabitStats(habit, today);
                     
                     return (
                       <div 

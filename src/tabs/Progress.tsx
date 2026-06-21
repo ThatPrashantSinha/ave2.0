@@ -112,8 +112,16 @@ export function Progress({ tasks, habits }: { tasks: Task[], habits: Habit[] }) 
         <h2 className="font-sans text-3xl font-black uppercase tracking-tight border-b-4 border-ink pb-2">Daily Disciplines</h2>
         
         <div className="space-y-4">
-          {habits.map((habit) => (
-            <div key={habit.id} className="border-[6px] border-ink bg-paper p-4">
+          {[...habits]
+            .sort((a, b) => {
+              const aH = a.hour !== undefined ? a.hour : 8;
+              const aM = a.minute !== undefined ? a.minute : 0;
+              const bH = b.hour !== undefined ? b.hour : 8;
+              const bM = b.minute !== undefined ? b.minute : 0;
+              return (aH * 60 + aM) - (bH * 60 + bM);
+            })
+            .map((habit) => (
+              <div key={habit.id} className="border-[6px] border-ink bg-paper p-4">
               <div className="flex justify-between items-center border-b border-ink/30 pb-2 mb-3">
                 <h3 className="font-sans font-black uppercase tracking-tight">{habit.name}</h3>
                 <div className="font-mono text-xs font-bold uppercase"><span className="text-subway-red">{habit.streak}</span> / Day Streak</div>
