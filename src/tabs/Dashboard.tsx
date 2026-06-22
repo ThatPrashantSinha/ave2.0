@@ -459,6 +459,17 @@ export function Dashboard({
     return () => clearInterval(interval);
   }, [isRunning, timeLeft]);
 
+  useEffect(() => {
+    if (isHabitModalOpen || isHabitWidgetExpanded) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isHabitModalOpen, isHabitWidgetExpanded]);
+
   const toggleTimer = () => setIsRunning(!isRunning);
   const resetTimer = () => { setIsRunning(false); setTimeLeft(25 * 60); };
   
@@ -852,11 +863,11 @@ export function Dashboard({
                     .map((habit) => {
                       const stats = getHabitStats(habit, today);
                     
-                    return (
-                      <div 
-                        key={habit.id} 
-                        className="relative bg-paper border-2 border-ink p-3 rounded shadow-[2.5px_2.5px_0px_#1A1A1B] flex flex-col gap-2.5 transition-all hover:-translate-y-0.5 hover:shadow-[3.5px_3.5px_0px_#1A1A1B] overflow-hidden"
-                      >
+                      return (
+                        <div 
+                          key={habit.id} 
+                          className="relative bg-paper border-2 border-ink p-2 rounded-sm shadow-[2px_2px_0px_#1A1A1B] flex flex-col gap-1.5 transition-all hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_#1A1A1B] overflow-hidden"
+                        >
                         {/* Custom visual route left-stripe accent representing the lines */}
                         <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: habit.color || '#E11D48' }} />
                         
@@ -865,21 +876,21 @@ export function Dashboard({
                           <div className="flex items-center gap-2 min-w-0">
                             {/* Route Icon */}
                             <div 
-                              className="w-6 h-6 rounded-full border border-ink flex items-center justify-center text-[11px] shrink-0 shadow-[1px_1px_0px_#1A1A1B] text-white"
+                              className="w-5 h-5 rounded-full border border-ink flex items-center justify-center text-[10px] shrink-0 shadow-[0.5px_0.5px_0px_#1A1A1B] text-white"
                               style={{ backgroundColor: habit.color || '#E11D48' }}
                             >
-                              <HabitIcon iconName={habit.icon || '📍'} size={11} className="shrink-0 text-white" />
+                              <HabitIcon iconName={habit.icon || '📍'} size={9} className="shrink-0 text-white" />
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-sans font-black text-[10.5px] text-ink truncate leading-tight tracking-tight">
+                              <h4 className="font-sans font-black text-[10px] text-ink truncate leading-tight tracking-tight">
                                 {habit.name}
                               </h4>
                               <div className="flex items-center gap-1.5 mt-0.5 leading-none">
-                                <span className="font-mono text-[7px] font-black tracking-wider text-subway-red uppercase bg-subway-red/10 border border-subway-red/30 px-1 py-0.2 rounded-3xs">
+                                <span className="font-mono text-[6.5px] font-black tracking-wider text-subway-red uppercase bg-subway-red/10 border border-subway-red/30 px-1 py-0.2 rounded-3xs">
                                   {habit.frequency || 'daily'}
                                 </span>
                                 {habit.hour !== undefined && (
-                                  <span className="font-mono text-[7px] font-bold text-ink/60 bg-paper-dark border border-ink/15 px-1 py-0.2 rounded-3xs">
+                                  <span className="font-mono text-[6.5px] font-bold text-ink/60 bg-paper-dark border border-ink/15 px-1 py-0.2 rounded-3xs">
                                     ⏰ {String(habit.hour).padStart(2, '0')}:{String(habit.minute !== undefined ? habit.minute : 0).padStart(2, '0')}
                                   </span>
                                 )}
@@ -890,7 +901,7 @@ export function Dashboard({
                           {/* Streak Badge & Config */}
                           <div className="flex items-center gap-1 shrink-0">
                             <span 
-                              className="font-mono text-[8px] font-black bg-taxi border border-ink px-1.5 py-[2px] rounded-3xs select-none shadow-[1px_1px_0px_#1A1A1B] flex items-center gap-0.5 uppercase leading-none"
+                              className="font-mono text-[7.5px] font-black bg-taxi border border-ink px-1 py-[1.5px] rounded-3xs select-none shadow-[0.5px_0.5px_0px_#1A1A1B] flex items-center gap-0.5 uppercase leading-none"
                               title="Current active streak"
                             >
                               🔥 {stats.currentStreak}d
@@ -907,8 +918,8 @@ export function Dashboard({
 
                         {/* Beautifully stylized railway station node network */}
                         <div className="pl-1.5 mt-0.5">
-                          <div className="bg-paper-dark/20 border border-ink/10 rounded-xs p-2.5">
-                            <div className="flex justify-between items-center text-[7px] font-mono uppercase tracking-wider text-ink/40 font-black mb-2.5 leading-none">
+                          <div className="bg-paper-dark/20 border border-ink/10 rounded-xs p-2">
+                            <div className="flex justify-between items-center text-[7px] font-mono uppercase tracking-wider text-ink/40 font-black mb-1.5 leading-none">
                               <span>🛤️ LINE SCHEDULE STATUS</span>
                               <span className="text-subway-red flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-subway-red animate-ping" />
@@ -916,7 +927,7 @@ export function Dashboard({
                               </span>
                             </div>
                             
-                            <div className="relative flex items-center justify-between px-2 h-7 mt-1">
+                            <div className="relative flex items-center justify-between px-2 h-6 mt-1">
                               {/* Background Railway line */}
                               <div className="absolute left-4 right-4 h-[4px] bg-ink/10 rounded-full" />
                               
@@ -935,13 +946,13 @@ export function Dashboard({
                                 const freq = habit.frequency || 'daily';
                                 let isScheduled = true;
                                 if (freq === 'weekdays') isScheduled = dayOfWeek >= 1 && dayOfWeek <= 5;
-                                else if (freq === 'weekends') isScheduled = dayOfWeek === 0 || dayOfWeek === 6;
-                                else if (freq === 'weekly' || freq === 'custom') {
-                                  if (habit.daysOfWeek && habit.daysOfWeek.length > 0) {
-                                    isScheduled = habit.daysOfWeek.includes(dayOfWeek);
+                                  else if (freq === 'weekends') isScheduled = dayOfWeek === 0 || dayOfWeek === 6;
+                                  else if (freq === 'weekly' || freq === 'custom') {
+                                    if (habit.daysOfWeek && habit.daysOfWeek.length > 0) {
+                                      isScheduled = habit.daysOfWeek.includes(dayOfWeek);
+                                    }
                                   }
-                                }
-                                const isToday = isSameDay(dayObj.rawDate, today);
+                                  const isToday = isSameDay(dayObj.rawDate, today);
 
                                 return (
                                   <div key={dayObj.dateStr} className="flex flex-col items-center relative z-10 w-9">
@@ -954,13 +965,13 @@ export function Dashboard({
                                       }}
                                       disabled={!isScheduled}
                                       className={cn(
-                                        "w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center transition-all cursor-pointer select-none relative",
+                                        "w-4 h-4 rounded-full border flex items-center justify-center transition-all cursor-pointer select-none relative",
                                         !isScheduled 
                                           ? "bg-ink/10 border-ink/20 opacity-40 cursor-not-allowed border-dashed overflow-hidden" 
                                           : isDone 
                                             ? "border-ink text-white scale-110 shadow-[1px_1px_1px_rgba(0,0,0,0.2)] hover:scale-125" 
                                             : "bg-paper border-ink hover:bg-paper-dark hover:scale-110 shadow-[0.5px_0.5px_0px_rgba(0,0,0,0.1)]",
-                                        isToday && !isDone && "ring-2 ring-subway-red"
+                                        isToday && !isDone && "ring-1 shadow-xs ring-subway-red"
                                       )}
                                       style={isDone && isScheduled ? { backgroundColor: habit.color || '#E11D48' } : undefined}
                                       title={`${dayObj.dayLabel}: ${isDone ? 'COMPLETED' : !isScheduled ? 'BLOCKED - NOT SET' : 'PENDING'} (Click to toggle)`}
@@ -969,17 +980,17 @@ export function Dashboard({
                                         <Check size={8} className="text-white shrink-0" strokeWidth={5} />
                                       ) : !isScheduled ? (
                                         <>
-                                          <div className="absolute w-[1.5px] h-3 bg-ink/40 rotate-45" />
-                                          <div className="absolute w-[1.5px] h-3 bg-ink/40 -rotate-45" />
+                                          <div className="absolute w-[1.2px] h-2.5 bg-ink/40 rotate-45" />
+                                          <div className="absolute w-[1.2px] h-2.5 bg-ink/40 -rotate-45" />
                                         </>
                                       ) : (
-                                        <div className="w-[4px] h-[4px] rounded-full bg-ink/30" />
+                                        <div className="w-[3px] h-[3px] rounded-full bg-ink/30" />
                                       )}
                                     </button>
                                     <span className={cn(
-                                      "font-mono text-[7px] font-black mt-1.5 uppercase tracking-wide select-none leading-none px-1 py-0.2 rounded-3xs",
+                                      "font-mono text-[6.5px] font-black mt-1 uppercase tracking-wide select-none leading-none px-0.5 py-0.2 rounded-3xs",
                                       isToday 
-                                        ? "bg-subway-red text-white border border-ink/30 shadow-[0.5px_0.5px_0px_rgba(0,0,0,0.2)]" 
+                                        ? "bg-subway-red text-white border border-ink/30 shadow-[0.5px_0.5px_0px_rgba(0,0,0,0.1)]" 
                                         : "text-ink/40"
                                     )}>
                                       {dayObj.shortLabel}
@@ -989,32 +1000,6 @@ export function Dashboard({
                               })}
                             </div>
                           </div>
-                        </div>
-
-                        {/* Extra bottom metrics bar & Board Today Ticket Punch toggle */}
-                        <div className="pl-1.5 flex items-center justify-between font-mono text-[7.5px] font-bold opacity-80 border-t border-ink/5 border-dashed pt-2 mt-1 gap-2">
-                          <div className="flex items-center gap-2 text-ink/50 uppercase leading-none font-black">
-                            <span>🔄 RATE: <strong className="text-ink font-mono">{stats.completionRate30}%</strong></span>
-                            <span>🏆 TOTAL: <strong className="text-ink font-mono">{stats.totalCompletions}x</strong></span>
-                          </div>
-                          
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (toggleHabitHistory) {
-                                toggleHabitHistory(habit.id, todayStr);
-                              }
-                            }}
-                            className={cn(
-                              "font-mono text-[7px] font-black border border-ink/80 py-0.5 px-2 uppercase select-none transition-all active:translate-y-[0.5px] cursor-pointer shadow-[1px_1px_0px_#1A1A1B] active:shadow-none flex items-center gap-1 rounded-sm",
-                              habit.history?.[todayStr] 
-                                ? "bg-emerald-500 text-white border-white shadow-none scale-95" 
-                                : "bg-taxi text-ink hover:bg-taxi/90"
-                            )}
-                          >
-                            <span>🎟️</span>
-                            <span>{habit.history?.[todayStr] ? 'RIDE APPROVED' : 'BOARD TODAY'}</span>
-                          </button>
                         </div>
                       </div>
                     );
@@ -1036,8 +1021,8 @@ export function Dashboard({
 
         {/* RETRO HABIT DISPATCH CONTROLLER MODAL */}
         {isHabitModalOpen && (
-          <div className="fixed inset-0 bg-ink/75 z-50 flex items-center justify-center p-4 backdrop-blur-3xs select-none">
-            <div className="w-full max-w-[420px] bg-paper border-[6px] border-ink p-6 relative shadow-[8px_8px_0px_#1A1A1B] animate-in fade-in zoom-in-95 duration-100 text-ink">
+          <div className="fixed inset-0 bg-ink/75 z-50 overflow-y-auto backdrop-blur-3xs select-none p-4 flex justify-center items-start sm:items-center">
+            <div className="w-full max-w-[420px] bg-paper border-[6px] border-ink p-6 relative shadow-[8px_8px_0px_#1A1A1B] animate-in fade-in zoom-in-95 duration-100 text-ink my-auto">
               {/* Close button */}
               <button 
                 type="button"

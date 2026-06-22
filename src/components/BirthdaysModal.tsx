@@ -88,14 +88,14 @@ export function BirthdaysModal({
         onClick={onClose}
       />
       
-      <div className="relative w-full max-w-sm sm:max-w-xl bg-paper border-[6px] border-ink shadow-[8px_8px_0px_#1A1A1B] flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150">
+      <div className="relative w-full max-w-sm sm:max-w-lg bg-paper border-[4px] border-ink shadow-[5px_5px_0px_#1A1A1B] flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="bg-ink text-paper p-4 flex justify-between items-center border-b-[6px] border-taxi shrink-0">
+        <div className="bg-ink text-paper p-3 flex justify-between items-center border-b-[4px] border-taxi shrink-0">
           <div>
-            <h3 className="font-sans font-black text-xl uppercase tracking-tight flex items-center gap-2">
-              <Gift size={20} className="text-taxi" strokeWidth={2.5} /> Birthday Registry
+            <h3 className="font-sans font-black text-lg uppercase tracking-tight flex items-center gap-2 leading-none">
+              <Gift size={16} className="text-taxi" strokeWidth={2.5} /> Birthday Registry
             </h3>
-            <p className="font-mono text-[9px] uppercase tracking-widest font-bold opacity-80 text-taxi mt-0.5">
+            <p className="font-mono text-[8.5px] uppercase tracking-widest font-bold opacity-80 text-taxi mt-1">
               Save birth dates of people for highlight.
             </p>
           </div>
@@ -104,31 +104,31 @@ export function BirthdaysModal({
             onClick={onClose} 
             className="text-paper hover:text-taxi transition-colors cursor-pointer"
           >
-            <X size={20} strokeWidth={3} />
+            <X size={18} strokeWidth={3} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+         <div className="p-4 overflow-y-auto flex-1 space-y-4">
           {/* Add New Birthday Form */}
-          <div className="bg-paper-dark border-[4px] border-ink p-4 shadow-[4px_4px_0px_#1A1A1B] transition-all duration-300">
-            <div className="flex justify-between items-center border-b-2 border-ink pb-2 mb-3">
-              <h4 className="font-sans font-bold text-sm uppercase tracking-tight text-ink flex items-center gap-1.5 leading-none">
-                <Plus size={14} strokeWidth={3} /> Add Person
+          <div className="bg-paper-dark border-2 border-ink p-3 shadow-[2px_2px_0px_#1A1A1B] transition-all duration-300">
+            <div className={cn("flex justify-between items-center border-b-2 border-ink pb-2", !isFormMinimized && "mb-3")}>
+              <h4 className="font-sans font-bold text-xs uppercase tracking-tight text-ink flex items-center gap-1.5 leading-none">
+                <Plus size={12} strokeWidth={3} /> Add Person
               </h4>
               <button
                 type="button"
                 onClick={() => setIsFormMinimized(!isFormMinimized)}
-                className="font-mono text-[9px] font-black uppercase text-ink/70 hover:text-ink hover:bg-ink/5 border-2 border-ink py-1 px-2 flex items-center gap-1 cursor-pointer transition-all bg-paper shadow-[1.5px_1.5px_0px_#1A1A1B] active:translate-y-[0.5px] active:shadow-none"
+                className="font-mono text-[8px] font-black uppercase text-ink/70 hover:text-ink hover:bg-ink/5 border border-ink py-0.5 px-1.5 flex items-center gap-1 cursor-pointer transition-all bg-paper shadow-[1px_1px_0px_#1A1A1B] active:translate-y-[0.5px] active:shadow-none"
               >
                 {isFormMinimized ? (
                   <>
-                    <ChevronDown size={11} strokeWidth={3} />
+                    <ChevronDown size={10} strokeWidth={3} />
                     <span>EXPAND</span>
                   </>
                 ) : (
                   <>
-                    <ChevronUp size={11} strokeWidth={3} />
+                    <ChevronUp size={10} strokeWidth={3} />
                     <span>MINIMIZE</span>
                   </>
                 )}
@@ -150,27 +150,27 @@ export function BirthdaysModal({
                     setSelectedDay('01');
                   }
                 }} 
-                className="space-y-4 animate-in fade-in duration-200"
+                className="space-y-3 animate-in fade-in duration-200"
               >
                 <div>
-                  <label className="block font-mono text-[9px] uppercase font-bold tracking-wider text-ink/75 mb-1">Name</label>
+                  <label className="block font-mono text-[8px] uppercase font-bold tracking-wider text-ink/75 mb-0.5">Name</label>
                   <input 
                     name="bday_name" 
                     type="text" 
                     required 
                     placeholder="e.g. Alice Cooper" 
-                    className="w-full bg-paper border-[3px] border-ink px-2.5 py-1.5 text-xs font-sans font-bold focus:outline-none focus:bg-paper-dark leading-tight" 
+                    className="w-full bg-paper border-2 border-ink px-2 py-1 text-xs font-sans font-bold focus:outline-none focus:bg-paper-dark leading-tight" 
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-mono text-[9px] uppercase font-bold tracking-wider text-ink/75 mb-1.5 flex justify-between items-center">
+                    <label className="block font-mono text-[8px] uppercase font-bold tracking-wider text-ink/75 mb-1 flex justify-between items-center">
                       <span>Select Month</span>
-                      <span className={cn("text-[9px] font-black uppercase text-white px-1.5 py-0.5 rounded-sm shadow-[1.5px_1.5px_0px_#1A1A1B]", MONTH_COLORS[selectedMonth].labelBg)}>
+                      <span className={cn("text-[8px] font-black uppercase text-white px-1 py-0.2 rounded-3xs shadow-[1px_1px_0px_#1A1A1B]", MONTH_COLORS[selectedMonth].labelBg)}>
                         {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(selectedMonth, 10) - 1]}
                       </span>
                     </label>
-                    <div className="grid grid-cols-4 gap-1 bg-paper border-[3px] border-ink p-1.5 shadow-[2px_2px_0px_#1A1A1B]">
+                    <div className="grid grid-cols-6 gap-0.5 bg-paper border-2 border-ink p-1 shadow-[1px_1px_0px_#1A1A1B]">
                       {[
                         { id: '01', label: 'JAN' },
                         { id: '02', label: 'FEB' },
@@ -193,9 +193,9 @@ export function BirthdaysModal({
                             type="button"
                             onClick={() => handleMonthChange(m.id)}
                             className={cn(
-                              "py-1 text-[9px] font-mono font-black uppercase text-center border-2 transition-all cursor-pointer",
+                              "py-0.5 text-[8px] font-mono font-black uppercase text-center border transition-all cursor-pointer",
                               isSel
-                                ? `${col.labelBg} text-white border-ink shadow-[2px_2px_0px_#1A1A1B] scale-105`
+                                ? `${col.labelBg} text-white border-ink shadow-[1px_1px_0px_#1A1A1B] scale-102`
                                 : `bg-transparent border-transparent ${col.hoverBorder} ${col.hoverBg} ${col.text} font-bold opacity-75 hover:opacity-100`
                             )}
                           >
@@ -207,13 +207,13 @@ export function BirthdaysModal({
                   </div>
 
                   <div>
-                    <label className="block font-mono text-[9px] uppercase font-bold tracking-wider text-ink/75 mb-1.5 flex justify-between items-center">
+                    <label className="block font-mono text-[8px] uppercase font-bold tracking-wider text-ink/75 mb-1 flex justify-between items-center">
                       <span>Select Day</span>
-                      <span className="text-[9px] font-black uppercase text-taxi bg-ink px-1.5 py-0.5 rounded-sm">
+                      <span className="text-[8px] font-black uppercase text-taxi bg-ink px-1 py-0.2 rounded-3xs">
                         Day {parseInt(selectedDay, 10)}
                       </span>
                     </label>
-                    <div className="grid grid-cols-7 gap-1 bg-paper border-[3px] border-ink p-1.5 shadow-[2px_2px_0px_#1A1A1B]">
+                    <div className="grid grid-cols-7 gap-0.5 bg-paper border-2 border-ink p-1 shadow-[1px_1px_0px_#1A1A1B]">
                       {Array.from({ length: maxDaysForMonth }, (_, i) => {
                         const val = String(i + 1).padStart(2, '0');
                         return (
@@ -221,9 +221,9 @@ export function BirthdaysModal({
                             key={val}
                             type="button"
                             onClick={() => setSelectedDay(val)}
-                            className={`aspect-square flex items-center justify-center text-[9px] font-mono font-black border-2 transition-all cursor-pointer ${
+                            className={`aspect-square flex items-center justify-center text-[8px] font-mono font-black border transition-all cursor-pointer ${
                               selectedDay === val
-                                ? 'bg-taxi text-ink border-ink shadow-[2px_2px_0px_#1A1A1B] scale-105'
+                                ? 'bg-taxi text-ink border-ink shadow-[1px_1px_0px_#1A1A1B] scale-102'
                                 : 'bg-transparent border-transparent hover:border-ink/30 text-ink hover:text-ink'
                             }`}
                           >
@@ -236,19 +236,12 @@ export function BirthdaysModal({
                 </div>
                 <button 
                   type="submit" 
-                  className="w-full py-1.5 bg-ink text-paper font-mono text-[10px] uppercase font-black hover:bg-taxi hover:text-ink border-[3px] border-ink transition-colors cursor-pointer"
+                  className="w-full py-1 bg-ink text-paper font-mono text-[9px] uppercase font-black hover:bg-taxi hover:text-ink border-2 border-ink transition-colors cursor-pointer"
                 >
                   REGISTER BIRTHDAY
                 </button>
               </form>
-            ) : (
-              <div 
-                onClick={() => setIsFormMinimized(false)}
-                className="py-2.5 px-3 bg-paper border-2 border-dashed border-ink/20 hover:border-ink/50 text-center font-mono text-[9.5px] uppercase font-bold text-ink/40 cursor-pointer transition-all hover:text-ink/65 hover:bg-ink/5 flex items-center justify-center gap-1"
-              >
-                <span>Form minimized. Click here or EXPAND to register family & crew.</span>
-              </div>
-            )}
+            ) : null}
           </div>
 
           {/* List of Registered Birthdays */}
@@ -328,8 +321,8 @@ export function BirthdaysModal({
               return (
                 <div 
                   className={cn(
-                    "space-y-2.5 overflow-y-auto pr-1 transition-all duration-300",
-                    isFormMinimized ? "max-h-[460px] min-h-[300px]" : "max-h-[220px]"
+                    "space-y-2 overflow-y-auto pr-1 transition-all duration-300",
+                    isFormMinimized ? "max-h-[480px]" : "max-h-[180px]"
                   )}
                 >
                   {processedBirthdays.map((bday) => {
@@ -340,11 +333,11 @@ export function BirthdaysModal({
                       <div 
                         key={bday.id} 
                         className={cn(
-                          "relative flex justify-between items-center border-[3px] border-ink p-3 pl-4 transition-all duration-200 hover:-translate-y-[1px] select-none rounded animate-in fade-in duration-150 shadow-[3px_3px_0px_#1A1A1B]",
+                          "relative flex justify-between items-center border-2 border-ink p-2 pl-3 transition-all duration-200 hover:-translate-y-[1px] select-none rounded animate-in fade-in duration-150 shadow-[2px_2px_0px_#1A1A1B]",
                           col.bg,
-                          isNextComing ? "ring-2 ring-ink ring-offset-1" : ""
+                          isNextComing ? "ring-1 ring-ink ring-offset-0.5" : ""
                         )}
-                        style={{ borderLeftWidth: '8px', borderLeftColor: col.color }}
+                        style={{ borderLeftWidth: '5px', borderLeftColor: col.color }}
                       >
                         <div className="min-w-0 flex-1 mr-2">
                           <div className="flex items-center gap-1.5 flex-wrap">

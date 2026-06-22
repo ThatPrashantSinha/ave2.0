@@ -1546,7 +1546,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                       NEXT: IN {Math.floor(minsToNextPin / 60) > 0 ? `${Math.floor(minsToNextPin / 60)}h ${minsToNextPin % 60}m` : `${minsToNextPin % 60}m`}
                     </div>
                     <div className="font-sans font-bold text-[7.5px] text-ink uppercase mt-0.5 truncate">
-                      AWAITING DEPARTURE: {nextPin.name}
+                      AWAITING START: {nextPin.name}
                     </div>
                   </>
                 ) : (
@@ -1810,7 +1810,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                 {/* Header banner */}
                 <div className="bg-ink text-paper px-3 py-1.5 flex justify-between items-center">
                   <span className="font-mono text-[9px] font-black uppercase tracking-wider">
-                    DEPARTURE & ARRIVAL TRANSIT LOG
+                    STARTS & ENDS TRANSIT LOG
                   </span>
                   <span className="font-mono text-[8px] opacity-75 font-bold">
                     DOCKET NO. {selectedTask.id ? selectedTask.id.slice(0, 6).toUpperCase() : 'N/A'}
@@ -1822,7 +1822,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                   {/* Departure Block */}
                   <div className="p-3 bg-[#FFFDF5]">
                     <span className="font-mono text-[9px] font-black uppercase tracking-wider text-subway-red block mb-1">
-                      ◀ DEPARTURE / BOARDING
+                      ◀ STARTS
                     </span>
                     <div className="flex items-baseline gap-2">
                       <span className="font-sans font-black text-2xl tracking-tighter text-ink leading-none">
@@ -1840,7 +1840,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                     {/* Departure Time */}
                     <div className="mt-3 pt-2 border-t border-dashed border-ink/35 flex items-center gap-1.5">
                       <span className="font-mono text-[8px] bg-ink text-paper px-1.5 py-0.5 font-black uppercase tracking-wider rounded-xs leading-none">
-                        DEP
+                        START
                       </span>
                       <span className="font-sans font-black text-xs uppercase text-ink leading-none">
                         {selectedTask.deadline ? format(new Date(selectedTask.deadline), 'hh:mm a') : 'ANYTIME'}
@@ -1852,7 +1852,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                   {selectedTask.endTime && (
                     <div className="p-3 bg-[#FFFEEF]">
                       <span className="font-mono text-[9px] font-black uppercase tracking-wider text-[#10B981] block mb-1">
-                        ▶ ARRIVAL / DISCHARGE
+                        ▶ ENDS
                       </span>
                       <div className="flex items-baseline gap-2">
                         <span className="font-sans font-black text-2xl tracking-tighter text-ink leading-none">
@@ -1870,7 +1870,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                       {/* Arrival Time */}
                       <div className="mt-3 pt-2 border-t border-dashed border-ink/35 flex items-center gap-1.5">
                         <span className="font-mono text-[8px] bg-ink text-paper px-1.5 py-0.5 font-black uppercase tracking-wider rounded-xs leading-none">
-                          ARR
+                          END
                         </span>
                         <span className="font-sans font-black text-xs uppercase text-ink leading-none">
                           {format(new Date(selectedTask.endTime), 'hh:mm a')}
@@ -2758,12 +2758,12 @@ function DrawForm({
         {/* Beautiful thematic newspaper ledger box */}
         <div className="bg-paper-dark/60 border-[4px] border-ink p-4 shadow-[6px_6px_0px_#1A1A1B] flex flex-col divide-y-[3px] divide-ink font-sans">
           
-          {/* Departure (OUTBOUND) */}
+          {/* Starts (OUTBOUND) */}
           <div className="pb-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3.5">
             {/* Left Column: Date picker */}
             <div className="flex flex-col select-none relative" ref={startCalendarRef}>
               <span className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/50 mb-1 flex items-center gap-1">
-                <span>01 // OUTBOUND DEPARTURE</span>
+                <span>01 // OUTBOUND START</span>
               </span>
               <button
                 type="button"
@@ -2795,7 +2795,7 @@ function DrawForm({
             {/* Right Column: Time picker */}
             <div className="flex flex-col md:items-end select-none">
               <span className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/50 mb-1 md:text-right">
-                DEPARTURE TIME
+                START TIME
               </span>
               <button
                 type="button"
@@ -2808,12 +2808,12 @@ function DrawForm({
             </div>
           </div>
 
-          {/* Arrival (INBOUND) */}
+          {/* Ends (INBOUND) */}
           <div className="pt-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3.5">
             {/* Left Column: Date picker */}
             <div className="flex flex-col select-none relative" ref={endCalendarRef}>
               <span className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/50 mb-1 flex items-center gap-1">
-                <span>02 // INBOUND ARRIVAL</span>
+                <span>02 // INBOUND END</span>
               </span>
               <button
                 type="button"
@@ -2841,7 +2841,7 @@ function DrawForm({
             {/* Right Column: Time picker */}
             <div className="flex flex-col md:items-end select-none">
               <span className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/50 mb-1 md:text-right">
-                ARRIVAL TIME
+                END TIME
               </span>
               <button
                 type="button"
@@ -3140,7 +3140,7 @@ function DrawForm({
             setEndTime(`${nextHourStr}:${mStr}`);
           }
         }}
-        title="BOARDING DEP DIAL"
+        title="START TIME DIAL"
       />
 
       <AnalogClockPicker
@@ -3148,7 +3148,7 @@ function DrawForm({
         onClose={() => setIsEndPickerOpen(false)}
         value={endTime}
         onChange={(newValue) => setEndTime(newValue)}
-        title="TRANSIT ARRIVAL DIAL"
+        title="END TIME DIAL"
       />
 
     </form>
