@@ -7,6 +7,7 @@ import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { HabitIcon } from '../components/HabitIcon';
 import { SubwayTransitIcon } from '../components/SubwayTransitIcon';
 import { NotesWidget } from '../components/NotesWidget';
+import { TransitClockSelector } from '../components/TransitClockSelector';
 
 // Accurate dynamic habit statistics calculator matching transit-themed custom days
 export function getHabitStats(habit: Habit, todayDate: Date) {
@@ -705,127 +706,89 @@ export function Dashboard({
       <div className="md:col-span-5 space-y-6">
         
         {/* Subway Momentum */}
-        <div className="border-[6px] border-ink p-4 relative overflow-hidden bg-[#FCFAF5] rounded-sm shadow-[4px_4px_0px_#1A1A1B]">
+        <div className="border-[4px] border-ink p-3 relative overflow-hidden bg-[#FCFAF5] rounded-[2px] shadow-[3px_3px_0px_#1A1A1B]">
           {/* Subtle watermark */}
-          <div className="absolute top-1.5 right-2 p-1 font-mono text-3xl text-ink font-black opacity-[0.06] select-none">{progressPercent}%</div>
+          <div className="absolute top-1 right-2 p-0.5 font-mono text-2xl text-ink font-black opacity-[0.05] select-none">{progressPercent}%</div>
           
-          <div className="flex justify-between items-start border-b-2 border-ink pb-2.5 mb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <h2 className="font-sans font-black uppercase tracking-tight text-md flex items-center gap-1.5">
-                  SUBWAY MOMENTUM
-                </h2>
-              </div>
-              <p className="font-mono text-[8px] font-bold uppercase text-ink-light tracking-wider mt-0.5">Unified Docket & Habit Dispatch Monitor</p>
+          <div className="flex justify-between items-center border-b-2 border-ink pb-2 mb-3 select-none">
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <h2 className="font-sans font-black uppercase tracking-tight text-xs flex items-center gap-1.5">
+                SUBWAY MOMENTUM
+              </h2>
             </div>
             {/* Visual Digital Display */}
-            <div className="flex flex-col items-end gap-1.5">
-              <span className="font-mono text-[11px] font-black text-ink-light bg-ink/5 px-1.5 py-0.5 rounded leading-none select-none">
-                {completedDailyItems} / {totalDailyItems} STOPS
-              </span>
-              <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                {combinedStreak > 0 ? (
-                  <span className="font-mono text-[8.5px] font-black text-[#EF4444] bg-[#EF4444]/10 border border-[#EF4444]/30 px-1.5 py-0.5 rounded flex items-center gap-0.5 select-none animate-pulse">
-                    🔥 STREAK: {combinedStreak}D
-                  </span>
-                ) : (
-                  <span className="font-mono text-[8px] font-black text-ink/30 bg-ink/5 px-1.5 py-0.5 rounded select-none">
-                    💤 NO STREAK
-                  </span>
-                )}
-                <span className="font-mono text-[7px] text-[#22C55E] font-black tracking-widest uppercase select-none animate-pulse">
-                  {progressPercent}% EFFICIENT
+            <div className="flex items-center gap-2">
+              {combinedStreak > 0 && (
+                <span className="font-mono text-[8.5px] font-black text-[#EF4444] bg-[#EF4444]/15 border border-[#EF4444]/30 px-1.5 py-0.5 rounded flex items-center gap-0.5 leading-none animate-pulse">
+                  🔥 STREAK: {combinedStreak}D
                 </span>
-              </div>
+              )}
+              <span className="font-mono text-[10px] font-black text-ink bg-ink/5 border border-ink/10 px-2 py-0.5 rounded leading-none">
+                {completedDailyItems} / {totalDailyItems} STOPS ({progressPercent}%)
+              </span>
             </div>
           </div>
 
           {/* Unified Dispatch Linear Map */}
           {totalDailyItems > 0 ? (
-            <div className="relative pt-6 pb-2.5 px-2 mt-2">
+            <div className="relative pt-6 pb-2 px-1.5 mt-2">
               {/* Railroad background line tie indicators */}
-              <div className="absolute inset-x-2 h-[5px] bg-ink/10 top-8 rounded-full pointer-events-none" />
+              <div className="absolute inset-x-2 h-[4px] bg-ink/10 top-[31px] rounded-full pointer-events-none" />
               {/* Railroad active route neon track */}
               <div 
-                className="absolute left-2 h-[5px] bg-[#EF4444] top-8 rounded-full transition-all duration-1000 ease-out"
+                className="absolute left-2 h-[4px] bg-[#EF4444] top-[31px] rounded-full transition-all duration-1000 ease-out"
                 style={{ width: `calc(${progressPercent}% - 4px)` }}
               />
 
               {/* Station pointers dynamically rendered along the route */}
               <div className="relative flex justify-between items-center gap-1">
                 {(() => {
-                  const items = [
-                    ...todayOccurrences.map(task => ({
-                      id: task.id,
-                      name: task.title,
-                      isDone: task.status === 'done',
-                      type: 'task',
-                      icon: '📋'
-                    })),
-                    ...todayHabits.map(habit => ({
-                      id: habit.id,
-                      name: habit.name,
-                      isDone: !!habit.history?.[todayStr],
-                      type: 'habit',
-                      icon: habit.icon || '📍'
-                    }))
-                  ];
-
-                  // Limit displays if we have way too many stations to preserve UI spacing
-                  const visibleItems = items.slice(0, 5);
+                  const visibleItems = docketItems.slice(0, 6);
                   
                   return visibleItems.map((item, index) => {
                     const isCompleted = item.isDone;
+                    const name = item.type === 'habit' ? (item.original as Habit).name : (item.original as Task).title;
+
                     return (
-                      <div key={item.id} className="flex flex-col items-center flex-1 max-w-[80px]" title={`${item.type.toUpperCase()}: ${item.name}`}>
+                      <div key={item.id} className="flex flex-col items-center flex-1 max-w-[80px]" title={`${item.type.toUpperCase()}: ${name} (${item.timeLabel})`}>
+                        {/* Time stamp label on top of the node */}
+                        <span className="font-mono text-[7px] font-black text-ink/60 block select-none truncate w-full text-center mb-1.5 uppercase leading-none">
+                          {item.timeLabel}
+                        </span>
+
                         {/* Mechanical Station Bullet Node */}
                         <div 
                           className={cn(
-                            "w-4 h-4 rounded-full border-2 border-ink flex items-center justify-center bg-paper z-10 transition-all duration-300",
+                            "w-3.5 h-3.5 rounded-full border-2 border-ink flex items-center justify-center bg-paper z-10 transition-all duration-300",
                             isCompleted ? "scale-110 shadow-sm border-[#10B981] bg-[#10B981]" : "hover:border-subway-red"
                           )}
                           style={isCompleted ? { backgroundColor: '#10B981' } : undefined}
                         >
                           {isCompleted ? (
-                            <Check size={9} strokeWidth={5} className="text-white" />
+                            <Check size={8} strokeWidth={5} className="text-white" />
                           ) : (
                             <span className="font-mono text-[6px] font-bold text-ink-light">{index + 1}</span>
                           )}
                         </div>
+
                         {/* Sub label name */}
-                        <span className="font-sans font-black text-[7px] text-ink/80 text-center truncate w-full mt-2 uppercase tracking-tight leading-none">
-                          {item.name}
-                        </span>
-                        <span className="font-mono text-[5.5px] text-ink-light/70 uppercase mt-0.5 leading-none">
-                          {item.icon} {item.type}
+                        <span className="font-sans font-black text-[7.5px] text-ink/80 text-center truncate w-full mt-2 uppercase tracking-tight leading-none">
+                          {name}
                         </span>
                       </div>
                     );
                   });
                 })()}
               </div>
-
-              {/* Transit tracker message */}
-              <div className="flex justify-between items-center mt-6 pt-3 border-t border-dashed border-ink/15 font-mono text-[8.5px] font-black uppercase tracking-wider text-ink-light">
-                <span className="flex items-center gap-1">
-                  <Gauge size={10} className="text-ink-light" strokeWidth={2.5} />
-                  LINE: LOCAL-8 EXPRESS
-                </span>
-                <span className="flex items-center gap-1 font-sans font-black text-ink select-none">
-                  <Flame size={11} className={cn("inline shrink-0", combinedStreak > 0 ? "text-subway-red animate-pulse" : "text-ink/20")} />
-                  STREAK: {combinedStreak}D
-                </span>
-                <span>{progressPercent}% ARRIVED</span>
-              </div>
             </div>
           ) : (
-            <div className="py-6 border border-dashed border-ink/20 bg-paper-dark/15 text-center px-4 rounded">
-              <p className="font-serif italic text-xs text-ink/50">No dispatches scheduled on active route lines today.</p>
-              <p className="font-mono text-[7.5px] text-ink-light uppercase mt-1.5 font-bold tracking-widest">STATIONS ARE OPEN & AWAITING COMMUTE SCHEDULING</p>
+            <div className="py-4 border border-dashed border-ink/15 bg-paper-dark/10 text-center px-4 rounded">
+              <p className="font-serif italic text-xs text-ink/40">No dispatches scheduled on active route lines today.</p>
+              <p className="font-mono text-[7px] text-ink-light uppercase mt-1 font-bold tracking-widest">STATIONS ARE OPEN & AWAITING COMMUTE SCHEDULING</p>
             </div>
           )}
         </div>
@@ -1188,40 +1151,16 @@ export function Dashboard({
                 </div>
 
                 {/* Schedule time */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="font-mono text-[10px] font-black uppercase block text-ink/70">
-                      SET DISPATCH HOUR
-                    </label>
-                    <select
-                      value={habitFormHour}
-                      onChange={(e) => setHabitFormHour(parseInt(e.target.value, 10))}
-                      className="w-full bg-paper border-[3px] border-ink p-1.5 font-mono text-xs font-black uppercase outline-none shadow-[2px_2px_0px_#1A1A1B]"
-                    >
-                      {Array.from({ length: 24 }).map((_, h) => (
-                        <option key={h} value={h}>
-                          {String(h).padStart(2, '0')}:00 ({h >= 12 ? 'PM' : 'AM'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="font-mono text-[10px] font-black uppercase block text-ink/70">
-                      DISPATCH MINUTE
-                    </label>
-                    <select
-                      value={habitFormMinute}
-                      onChange={(e) => setHabitFormMinute(parseInt(e.target.value, 10))}
-                      className="w-full bg-paper border-[3px] border-ink p-1.5 font-mono text-xs font-black uppercase outline-none shadow-[2px_2px_0px_#1A1A1B]"
-                    >
-                      {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map((m) => (
-                        <option key={m} value={m}>
-                          {String(m).padStart(2, '0')} MINS
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="space-y-1">
+                  <TransitClockSelector
+                    hour={habitFormHour}
+                    minute={habitFormMinute}
+                    color={habitFormColor}
+                    onChange={(h, m) => {
+                      setHabitFormHour(h);
+                      setHabitFormMinute(m);
+                    }}
+                  />
                 </div>
 
                 {/* Tracker Frequency */}
@@ -1229,13 +1168,12 @@ export function Dashboard({
                   <label className="font-mono text-[10px] font-black uppercase block text-ink/70">
                     TRACK FREQUENCY
                   </label>
-                  <div className="grid grid-cols-5 gap-1.5">
+                  <div className="grid grid-cols-4 gap-1.5">
                     {[
                       { value: 'daily', label: 'DAILY' },
                       { value: 'weekdays', label: 'W-DAYS' },
                       { value: 'weekends', label: 'W-ENDS' },
-                      { value: 'weekly', label: 'WEEKLY' },
-                      { value: 'custom', label: 'CUSTOM' }
+                      { value: 'weekly', label: 'WEEKLY' }
                     ].map((freqObj) => (
                       <button
                         key={freqObj.value}
