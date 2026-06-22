@@ -1771,14 +1771,11 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
               </div>
               <button 
                 type="button"
-                onClick={() => {
-                  setEditingTask(selectedTask);
-                  setSelectedTask(null);
-                  setIsDrawerOpen(true);
-                }} 
-                className="bg-taxi hover:bg-taxi-hover text-ink border-[3px] border-ink px-3 py-1 font-mono text-[10px] font-black uppercase tracking-wider shadow-[3.5px_3.5px_0px_#1A1A1B] active:shadow-none active:translate-y-[1.5px] active:translate-x-[1.5px] transition-all flex items-center gap-1.5 cursor-pointer max-h-[30px]"
+                onClick={() => setSelectedTask(null)} 
+                className="text-paper hover:text-taxi transition-colors cursor-pointer"
+                aria-label="Close"
               >
-                <Edit size={11} strokeWidth={3} /> Edit Event
+                <X size={20} strokeWidth={3} />
               </button>
             </div>
 
@@ -2040,10 +2037,14 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                       </button>
                     )}
                     <button
-                      onClick={() => setSelectedTask(null)}
-                      className="flex-1 bg-paper border-[3px] border-ink py-2.5 font-mono text-[10px] font-black uppercase hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-all"
+                      onClick={() => {
+                        setEditingTask(selectedTask);
+                        setSelectedTask(null);
+                        setIsDrawerOpen(true);
+                      }}
+                      className="flex-1 bg-taxi hover:bg-taxi-hover text-ink border-[3px] border-ink py-2.5 font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] active:translate-x-[2px] transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      Close Dossier
+                      <Edit size={11} strokeWidth={3} /> Edit Dispatch
                     </button>
                   </>
                 )}
