@@ -1258,7 +1258,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                             )} />
 
                             {isMinimizedView ? (
-                              <div className="flex items-center h-full pl-[3.5px] pr-1 text-[6.5px] font-black uppercase text-ink overflow-hidden select-none leading-none">
+                              <div className="flex items-center h-full pl-[3.5px] pr-1 text-[6.5px] font-black text-ink overflow-hidden select-none leading-none">
                                 <span className="truncate w-full block">
                                   {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
                                   {task.title}
@@ -1270,7 +1270,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                                 isVerySmall ? "justify-center" : "justify-between py-0.5 pb-0.5"
                               )}>
                                 {isVerySmall ? (
-                                  <div className="flex items-center justify-between gap-1 w-full text-[7px] md:text-[8px] font-black uppercase text-ink leading-none">
+                                  <div className="flex items-center justify-between gap-1 w-full text-[7px] md:text-[8px] font-black text-ink leading-none">
                                     <span className="truncate pr-1">
                                       {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
                                       {task.title}
@@ -1285,7 +1285,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                                 <>
                                   {/* Title */}
                                   <div className={cn(
-                                    "font-sans font-black uppercase tracking-tight leading-none",
+                                    "font-sans font-black tracking-tight leading-none",
                                     cardHeight < 48 ? "text-[8px] md:text-[8.5px] line-clamp-1" : "text-[8.5px] md:text-[9.5px] line-clamp-2",
                                     task.status === 'done' ? "line-through text-ink/40" : "text-ink"
                                   )}>
@@ -1333,7 +1333,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
 
                                   {/* Title */}
                                   <div className={cn(
-                                    "font-sans font-black uppercase tracking-tight leading-tight text-[9px] md:text-[11px] line-clamp-2 mt-0.5",
+                                    "font-sans font-black tracking-tight leading-tight text-[9px] md:text-[11px] line-clamp-2 mt-0.5",
                                     task.status === 'done' ? "line-through text-ink/40" : "text-ink"
                                   )}>
                                     {task.status === 'in-progress' && <span className="text-subway-blue mr-0.5 animate-pulse inline-block">⚡</span>}
@@ -1800,7 +1800,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
                     </span>
                   ))}
                 </div>
-                <h4 className="font-sans font-black text-2xl uppercase tracking-tight text-ink leading-tight">
+                <h4 className="font-sans font-black text-2xl tracking-tight text-ink leading-tight">
                   {selectedTask.title}
                 </h4>
               </div>
@@ -1894,7 +1894,7 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
               {/* Description / Notes */}
               <div>
                 <span className="font-mono text-[9px] font-bold uppercase tracking-widest opacity-60 block mb-1">Dossier Notes</span>
-                <p className="bg-[#eeeadf] border-2 border-ink p-3 font-mono text-xs font-bold uppercase leading-relaxed text-ink/80 min-h-[60px] whitespace-pre-line">
+                <p className="bg-[#eeeadf] border-2 border-ink p-3 font-mono text-xs font-bold leading-relaxed text-ink/80 min-h-[60px] whitespace-pre-line">
                   {selectedTask.description || "NO ADDITIONAL SUB-INTELLIGENCE RECORDED."}
                 </p>
               </div>
@@ -2744,8 +2744,8 @@ function DrawForm({
           type="text" 
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full bg-paper-dark border-[4px] border-ink p-3 font-sans font-black uppercase text-xl focus:outline-none focus:border-taxi focus:bg-paper transition-colors"
-          placeholder="E.G. BOARD MEETING..."
+          className="w-full bg-paper-dark border-[4px] border-ink p-3 font-sans font-black text-xl focus:outline-none focus:border-taxi focus:bg-paper transition-colors"
+          placeholder="e.g. Board meeting..."
           required
         />
       </div>
@@ -3113,8 +3113,8 @@ function DrawForm({
         <textarea 
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full bg-paper-dark border-[4px] border-ink p-3 font-mono text-sm font-bold uppercase focus:outline-none focus:border-taxi focus:bg-paper min-h-[120px]"
-          placeholder="ADDITIONAL INTELLIGENCE..."
+          className="w-full bg-paper-dark border-[4px] border-ink p-3 font-mono text-sm font-bold focus:outline-none focus:border-taxi focus:bg-paper min-h-[120px]"
+          placeholder="Additional notes..."
         />
       </div>
 

@@ -1,6 +1,6 @@
 {
-  "name": "AVE2.0",
-  "description": "",
+  "name": "Ave",
+  "description": "Daily Disciplines and Routines Tracker",
   "requestFramePermissions": [
     "geolocation"
   ],

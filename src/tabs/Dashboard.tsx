@@ -217,6 +217,8 @@ export function Dashboard({
   const [habitFormColor, setHabitFormColor] = useState('#E11D48'); // Subway Red
   const [habitFormIcon, setHabitFormIcon] = useState('🏃‍♂️');
   const [habitFormError, setHabitFormError] = useState('');
+  const [isConfirmingModalDelete, setIsConfirmingModalDelete] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   const openEditHabit = (habit: Habit, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -229,6 +231,7 @@ export function Dashboard({
     setHabitFormColor(habit.color || '#E11D48');
     setHabitFormIcon(habit.icon || '🏃‍♂️');
     setHabitFormError('');
+    setIsConfirmingModalDelete(false);
     setIsHabitModalOpen(true);
   };
 
@@ -242,6 +245,7 @@ export function Dashboard({
     setHabitFormColor('#E11D48');
     setHabitFormIcon('🏃‍♂️');
     setHabitFormError('');
+    setIsConfirmingModalDelete(false);
     setIsHabitModalOpen(true);
   };
 
@@ -285,12 +289,7 @@ export function Dashboard({
 
   const handleHabitDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('DECOMISSION THIS TRACK ROOT?')) {
-      if (deleteHabit) {
-        await deleteHabit(id);
-      }
-      setIsHabitModalOpen(false);
-    }
+    setIsConfirmingModalDelete(true);
   };
 
   const toggleDayOfWeekSelection = (dayNum: number) => {
@@ -605,7 +604,7 @@ export function Dashboard({
                             )}
                           </div>
                           <h3 className={cn(
-                            "font-black font-sans leading-tight uppercase text-ink text-[11px] md:text-[11.5px] tracking-tight mt-1", 
+                            "font-black font-sans leading-tight text-ink text-[11px] md:text-[11.5px] tracking-tight mt-1", 
                             isUrgent && "tracking-wide text-[11.5px] md:text-[12.5px]",
                             isDone && "line-through text-ink/45"
                           )}>
@@ -636,7 +635,7 @@ export function Dashboard({
                             : task.description;
 
                           return (
-                            <p className="text-[10px] md:text-[11px] font-mono font-bold uppercase opacity-65 mt-2 pl-2.5 border-l-2 border-ink/35 leading-relaxed max-w-full italic break-words">
+                            <p className="text-[10px] md:text-[11px] font-mono font-bold opacity-65 mt-2 pl-2.5 border-l-2 border-ink/35 leading-relaxed max-w-full italic break-words">
                               {displayText}
                             </p>
                           );
@@ -909,7 +908,7 @@ export function Dashboard({
                               <HabitIcon iconName={habit.icon || '📍'} size={11} className="shrink-0 text-white" />
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-sans font-black uppercase text-[10.5px] text-ink truncate leading-tight tracking-tight">
+                              <h4 className="font-sans font-black text-[10.5px] text-ink truncate leading-tight tracking-tight">
                                 {habit.name}
                               </h4>
                               <div className="flex items-center gap-1.5 mt-0.5 leading-none">
@@ -1294,22 +1293,60 @@ export function Dashboard({
                 )}
 
                 {/* Submit Buttons */}
-                <div className="flex gap-3 pt-2">
-                  {editingHabit && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleHabitDelete(editingHabit.id, e)}
-                      className="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-800 border-[3px] border-ink py-2 font-mono text-[11px] font-extrabold uppercase rounded shadow-[3px_3px_0px_#1A1A1B] active:translate-y-0.5 active:shadow-[1px_1px_0px_#1A1A1B] transition-all flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <Trash2 size={12} strokeWidth={3} /> Delete
-                    </button>
+                <div className="flex flex-col gap-3 pt-2">
+                  {isConfirmingModalDelete && (
+                    <div className="bg-rose-50 border-2 border-[#E11D48] p-3 rounded text-center animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <p className="font-mono text-[9px] text-[#E11D48] font-black uppercase mb-1 flex items-center justify-center gap-1">
+                        🗑️ DECOMMISSION TRACK ROOT?
+                      </p>
+                      <p className="font-serif text-[11px] text-ink/75 mb-3 leading-relaxed">This will permanently dismantle the line and erase passenger history.</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsConfirmingModalDelete(false)}
+                          className="flex-1 bg-paper hover:bg-stone-100 text-ink border-2 border-ink py-1.5 font-mono text-[10px] font-black uppercase rounded cursor-pointer transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (editingHabit && deleteHabit) {
+                              await deleteHabit(editingHabit.id);
+                            }
+                            setIsConfirmingModalDelete(false);
+                            setIsHabitModalOpen(false);
+                          }}
+                          className="flex-1 bg-[#E11D48] hover:bg-rose-700 text-white border-2 border-ink py-1.5 font-mono text-[10px] font-black uppercase rounded cursor-pointer transition-all shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 active:shadow-none"
+                        >
+                          Yes, Delete
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  <button
-                    type="submit"
-                    className="flex-2 bg-taxi hover:bg-taxi/95 text-ink border-[3px] border-ink py-2 font-mono text-[11px] font-extrabold uppercase rounded shadow-[3px_3px_0px_#1A1A1B] active:translate-y-0.5 active:shadow-[1px_1px_0px_#1A1A1B] transition-all flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <Check size={12} strokeWidth={3} /> {editingHabit ? 'APPLY' : 'ACTIVATE'}
-                  </button>
+
+                  {!isConfirmingModalDelete && (
+                    <div className="flex gap-3">
+                      {editingHabit && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleHabitDelete(editingHabit.id, e)}
+                          className="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-800 border-[3px] border-ink py-2 font-mono text-[11px] font-extrabold uppercase rounded shadow-[3px_3px_0px_#1A1A1B] active:translate-y-0.5 active:shadow-[1px_1px_0px_#1A1A1B] transition-all flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 size={12} strokeWidth={3} /> Delete
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        className={cn(
+                          editingHabit ? "flex-2" : "flex-1",
+                          "bg-taxi hover:bg-taxi/95 text-ink border-[3px] border-ink py-2 font-mono text-[11px] font-extrabold uppercase rounded shadow-[3px_3px_0px_#1A1A1B] active:translate-y-0.5 active:shadow-[1px_1px_0px_#1A1A1B] transition-all flex items-center justify-center gap-1 cursor-pointer"
+                        )}
+                      >
+                        <Check size={12} strokeWidth={3} /> {editingHabit ? 'APPLY' : 'ACTIVATE'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </form>
             </div>
@@ -1491,7 +1528,7 @@ export function Dashboard({
                               <HabitIcon iconName={habit.icon || '📍'} size={14} className="text-white shrink-0" />
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-sans font-black uppercase text-sm text-ink truncate tracking-tight leading-none">
+                              <h4 className="font-sans font-black text-sm text-ink truncate tracking-tight leading-none">
                                 {habit.name}
                               </h4>
                               <div className="flex items-center gap-1.5 mt-1.5 leading-none">
@@ -1627,20 +1664,41 @@ export function Dashboard({
                             </button>
 
                             {/* Decommission route tracks */}
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (confirm("Are you sure you want to decommission this transit route? This will derail all recorded history.")) {
-                                  if (deleteHabit) {
-                                    await deleteHabit(habit.id);
-                                  }
-                                }
-                              }}
-                              className="bg-subway-red/10 text-subway-red hover:bg-subway-red hover:text-white border-2 border-subway-red py-1 px-2 text-[8.5px] font-mono font-black uppercase rounded shadow-[1.5px_1.5px_0px_rgba(225,29,72,0.15)] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer flex items-center justify-center shrink-0"
-                              title="Decommission track from list"
-                            >
-                              <Trash2 size={10} strokeWidth={3} />
-                            </button>
+                            {confirmingDeleteId === habit.id ? (
+                              <div className="flex items-center gap-1 bg-rose-50 border-2 border-subway-red p-1 rounded animate-in fade-in zoom-in-95 duration-150">
+                                <span className="font-mono text-[8px] text-subway-red font-black uppercase">Dismantle?</span>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (deleteHabit) {
+                                      await deleteHabit(habit.id);
+                                    }
+                                    setConfirmingDeleteId(null);
+                                  }}
+                                  className="bg-subway-red text-white py-0.5 px-1.5 text-[8px] font-mono font-black uppercase rounded hover:bg-[#E11D48] cursor-pointer"
+                                >
+                                  YES
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmingDeleteId(null)}
+                                  className="bg-paper text-ink border border-ink py-0.5 px-1.5 text-[8px] font-mono font-black uppercase rounded hover:bg-stone-100 cursor-pointer"
+                                >
+                                  NO
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setConfirmingDeleteId(habit.id);
+                                }}
+                                className="bg-subway-red/10 text-subway-red hover:bg-subway-red hover:text-white border-2 border-subway-red py-1 px-2 text-[8.5px] font-mono font-black uppercase rounded shadow-[1.5px_1.5px_0px_rgba(225,29,72,0.15)] active:translate-y-0.5 active:shadow-none transition-all cursor-pointer flex items-center justify-center shrink-0"
+                                title="Decommission track from list"
+                              >
+                                <Trash2 size={10} strokeWidth={3} />
+                              </button>
+                            )}
                           </div>
                         </div>
 

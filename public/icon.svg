@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Background: Soft Pastel Sage Green -->
+  <rect width="512" height="512" rx="120" fill="#C6D4B5" />
+  
+  <!-- Subtle Cozy Cream Shadow underneath -->
+  <ellipse cx="256" cy="435" rx="115" ry="18" fill="#A8B896" opacity="0.8" />
+
+  <!-- Grass Blades at the bottom -->
+  <!-- Left Grass -->
+  <path d="M 120 440 C 130 405, 160 410, 185 435 C 160 425, 140 425, 120 440 Z" fill="#5F7D43" />
+  <path d="M 160 442 C 170 380, 190 390, 205 435 C 190 415, 175 422, 160 442 Z" fill="#4B6334" />
+  <!-- Right Grass -->
+  <path d="M 320 435 C 335 390, 365 390, 380 435 C 360 415, 340 415, 320 435 Z" fill="#5F7D43" />
+  <path d="M 350 438 C 365 375, 380 380, 395 440 C 380 415, 365 418, 350 438 Z" fill="#4B6334" />
+
+  <!-- Clock Legs -->
+  <!-- Left Leg -->
+  <path d="M 160 380 Q 130 430 155 442 Q 180 435 185 390 Z" fill="#5B4029" stroke="#3A2514" stroke-width="8" stroke-linejoin="round" />
+  <!-- Right Leg -->
+  <path d="M 352 380 Q 382 430 357 442 Q 332 435 327 390 Z" fill="#5B4029" stroke="#3A2514" stroke-width="8" stroke-linejoin="round" />
+
+  <!-- Mushroom on top -->
+  <!-- Stalk -->
+  <path d="M 265 140 C 265 110, 290 100, 298 90 C 298 105, 275 125, 275 140 Z" fill="#ECE1CD" stroke="#3A2514" stroke-width="6" stroke-linecap="round" />
+  <!-- Cap -->
+  <path d="M 270 90 C 275 60, 325 60, 332 85 C 332 95, 310 98, 270 90 Z" fill="#C57567" stroke="#3A2514" stroke-width="6" stroke-linejoin="round" />
+  <!-- Mushroom Spots -->
+  <circle cx="290" cy="74" r="3" fill="#ECE1CD" />
+  <circle cx="312" cy="78" r="2.5" fill="#ECE1CD" />
+  <circle cx="298" cy="84" r="2" fill="#ECE1CD" />
+
+  <!-- Green Leaf on top -->
+  <path d="M 235 140 C 205 105, 205 75, 248 100 C 255 120, 245 135, 235 140 Z" fill="#6A8D55" stroke="#3A2514" stroke-width="7" stroke-linejoin="round" />
+  <!-- Leaf vein -->
+  <path d="M 235 140 Q 228 115 224 100" stroke="#3A2514" stroke-width="5" stroke-linecap="round" />
+
+  <!-- Alarm Bells -->
+  <!-- Left Bell -->
+  <path d="M 130 220 C 110 160, 195 120, 215 180 Z" fill="#DFB245" stroke="#3A2514" stroke-width="9" stroke-linejoin="round" />
+  <ellipse cx="165" cy="168" rx="20" ry="10" transform="rotate(-20 165 168)" fill="#F1CD6F" />
+  <!-- Right Bell -->
+  <path d="M 382 220 C 402 160, 317 120, 297 180 Z" fill="#DFB245" stroke="#3A2514" stroke-width="9" stroke-linejoin="round" />
+  <ellipse cx="347" cy="168" rx="20" ry="10" transform="rotate(20 347 168)" fill="#F1CD6F" />
+
+  <!-- Tiny Bell Mount Connection -->
+  <path d="M 180 200 L 200 220" stroke="#3A2514" stroke-width="12" stroke-linecap="round" />
+  <path d="M 332 200 L 312 220" stroke="#3A2514" stroke-width="12" stroke-linecap="round" />
+
+  <!-- Main Clock Outer Frame -->
+  <circle cx="256" cy="295" r="130" fill="#5B4029" stroke="#3A2514" stroke-width="12" />
+  
+  <!-- Outer Highlights -->
+  <path d="M 145 235 C 135 270, 140 320, 165 350" stroke="#7A5B3F" stroke-width="8" stroke-linecap="round" fill="none" />
+
+  <!-- Clock Inner Face -->
+  <circle cx="256" cy="295" r="102" fill="#FAF5E6" stroke="#3A2514" stroke-width="8" />
+
+  <!-- Hand-drawn style Hour Markers dots -->
+  <circle cx="256" cy="210" r="6" fill="#3A2514" /> <!-- 12 -->
+  <circle cx="341" cy="295" r="6" fill="#3A2514" /> <!-- 3 -->
+  <circle cx="256" cy="380" r="6" fill="#3A2514" /> <!-- 6 -->
+  <circle cx="171" cy="295" r="6" fill="#3A2514" /> <!-- 9 -->
+  
+  <!-- Intermediate Hour Markers (1, 2, 4, 5, 7, 8, 10, 11) -->
+  <circle cx="298" cy="221" r="4.5" fill="#3A2514" /> <!-- 1 -->
+  <circle cx="330" cy="253" r="4.5" fill="#3A2514" /> <!-- 2 -->
+  <circle cx="330" cy="337" r="4.5" fill="#3A2514" /> <!-- 4 -->
+  <circle cx="298" cy="369" r="4.5" fill="#3A2514" /> <!-- 5 -->
+  <circle cx="214" cy="369" r="4.5" fill="#3A2514" /> <!-- 7 -->
+  <circle cx="182" cy="337" r="4.5" fill="#3A2514" /> <!-- 8 -->
+  <circle cx="182" cy="253" r="4.5" fill="#3A2514" /> <!-- 10 -->
+  <circle cx="214" cy="221" r="4.5" fill="#3A2514" /> <!-- 11 -->
+
+  <!-- Clock Hands (Time around 8:12 for Ave Cozy Vibe) -->
+  <!-- Hour Hand -->
+  <path d="M 256 295 L 205 264" stroke="#3A2514" stroke-width="11" stroke-linecap="round" />
+  <!-- Minute Hand -->
+  <path d="M 256 295 L 256 225" stroke="#3A2514" stroke-width="8" stroke-linecap="round" />
+  
+  <!-- Hand Center Pin -->
+  <circle cx="256" cy="295" r="11" fill="#3A2514" />
+  <circle cx="256" cy="295" r="4" fill="#FAF5E6" />
+</svg>
