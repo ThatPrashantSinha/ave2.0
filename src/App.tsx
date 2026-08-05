@@ -8,15 +8,18 @@ import { Focus } from './tabs/Focus';
 import { useStore } from './store';
 import { DataManagementModal } from './components/DataManagementModal';
 import { BirthdaysModal } from './components/BirthdaysModal';
+import { TimeTableModal } from './components/TimeTableModal';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isBirthdaysOpen, setIsBirthdaysOpen] = useState(false);
+  const [isTimeTableOpen, setIsTimeTableOpen] = useState(false);
   const { 
     tasks, 
     habits, 
     birthdays, 
+    timeTableEntries,
     addTask, 
     toggleTaskStatus, 
     deleteTask, 
@@ -27,6 +30,11 @@ export default function App() {
     toggleHabitHistory,
     addBirthday,
     deleteBirthday,
+    addTimeTableEntry,
+    updateTimeTableEntry,
+    deleteTimeTableEntry,
+    resetTimeTable,
+    importTimeTableEntries,
     refreshStore 
   } = useStore();
 
@@ -60,6 +68,8 @@ export default function App() {
             updateTask={updateTask} 
             birthdays={birthdays}
             onOpenBirthdays={() => setIsBirthdaysOpen(true)}
+            timeTableEntries={timeTableEntries}
+            onOpenTimeTable={() => setIsTimeTableOpen(true)}
           />
         )}
         {currentTab === 'focus' && <Focus />}
@@ -81,6 +91,17 @@ export default function App() {
           birthdays={birthdays}
           addBirthday={addBirthday}
           deleteBirthday={deleteBirthday}
+        />
+
+        <TimeTableModal 
+          isOpen={isTimeTableOpen}
+          onClose={() => setIsTimeTableOpen(false)}
+          entries={timeTableEntries}
+          addEntry={addTimeTableEntry}
+          updateEntry={updateTimeTableEntry}
+          deleteEntry={deleteTimeTableEntry}
+          resetToSample={() => resetTimeTable()}
+          importEntries={importTimeTableEntries}
         />
     </div>
   );

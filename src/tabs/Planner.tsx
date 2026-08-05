@@ -1,5 +1,5 @@
 import React from 'react';
-import { Task, Birthday, Habit } from '../types';
+import { Task, Birthday, Habit, TimeTableEntry } from '../types';
 import { WeeklyCalendar } from './WeeklyCalendar';
 
 interface PlannerProps {
@@ -11,9 +11,22 @@ interface PlannerProps {
   updateTask: (id: string, updatedFields: Partial<Omit<Task, 'id'>> & { updateMode?: 'this' | 'following' | 'all' }) => void;
   birthdays: Birthday[];
   onOpenBirthdays: () => void;
+  timeTableEntries?: TimeTableEntry[];
+  onOpenTimeTable?: () => void;
 }
 
-export function Planner({ tasks, habits, addTask, toggleTask, deleteTask, updateTask, birthdays, onOpenBirthdays }: PlannerProps) {
+export function Planner({ 
+  tasks, 
+  habits, 
+  addTask, 
+  toggleTask, 
+  deleteTask, 
+  updateTask, 
+  birthdays, 
+  onOpenBirthdays,
+  timeTableEntries = [],
+  onOpenTimeTable
+}: PlannerProps) {
   return (
     <div className="w-full h-full flex-1 flex flex-col">
       <WeeklyCalendar 
@@ -25,6 +38,8 @@ export function Planner({ tasks, habits, addTask, toggleTask, deleteTask, update
         updateTask={updateTask} 
         birthdays={birthdays} 
         onOpenBirthdays={onOpenBirthdays} 
+        timeTableEntries={timeTableEntries}
+        onOpenTimeTable={onOpenTimeTable}
       />
     </div>
   );

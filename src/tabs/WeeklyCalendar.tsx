@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, getHours, getMinutes, addHours } from 'date-fns';
-import { Task, Birthday, Habit } from '../types';
+import { Task, Birthday, Habit, TimeTableEntry } from '../types';
 import { cn, toIST } from '../lib/utils';
-import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit, Gift, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Zap, Milestone, Gauge, Activity, Timer } from 'lucide-react';
+import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit, Gift, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Zap, Milestone, Gauge, Activity, Timer, GraduationCap } from 'lucide-react';
 import { AnalogClockPicker } from '../components/AnalogClockPicker';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { SketchPushPin } from '../components/SketchPushPin';
@@ -17,6 +17,8 @@ interface WeeklyCalendarProps {
   updateTask?: (id: string, updatedFields: Partial<Omit<Task, 'id'>> & { updateMode?: 'this' | 'following' | 'all' }) => void;
   birthdays: Birthday[];
   onOpenBirthdays: () => void;
+  timeTableEntries?: TimeTableEntry[];
+  onOpenTimeTable?: () => void;
 }
 
 interface EventLayout {
@@ -168,7 +170,18 @@ function formatTaskTimeRange(task: Task): string {
   return startTimeStr;
 }
 
-export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, deleteTask, updateTask, birthdays, onOpenBirthdays }: WeeklyCalendarProps) {
+export function WeeklyCalendar({ 
+  tasks, 
+  habits = [], 
+  addTask, 
+  toggleTask, 
+  deleteTask, 
+  updateTask, 
+  birthdays, 
+  onOpenBirthdays,
+  timeTableEntries = [],
+  onOpenTimeTable
+}: WeeklyCalendarProps) {
   const [currentDate, setCurrentDate] = useState(toIST(new Date()));
   const [activePopoverPinId, setActivePopoverPinId] = useState<string | null>(null);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
@@ -718,7 +731,18 @@ export function WeeklyCalendar({ tasks, habits = [], addTask, toggleTask, delete
           </div>
         </h2>
         <div className="flex flex-col items-end gap-2 mb-1 shrink-0">
+          {onOpenTimeTable && (
+            <button 
+              type="button"
+              onClick={onOpenTimeTable} 
+              className="px-2.5 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-paper text-ink transition-all shrink-0 flex items-center gap-1.5 select-none cursor-pointer group"
+              title="Open College Time Table"
+            >
+              <GraduationCap size={13} strokeWidth={2.5} className="text-subway-red group-hover:text-taxi transition-colors" /> TIME TABLE ({timeTableEntries.length})
+            </button>
+          )}
           <button 
+            type="button"
             onClick={onOpenBirthdays} 
             className="px-2.5 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-taxi text-ink transition-all shrink-0 flex items-center gap-1.5 select-none cursor-pointer"
           >
