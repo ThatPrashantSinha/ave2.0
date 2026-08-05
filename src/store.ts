@@ -250,6 +250,13 @@ export function useStore() {
       } else {
         setBirthdays([]);
       }
+
+      const storedTT = localStorage.getItem('daily_docket_timetable');
+      if (storedTT) {
+        setTimeTableEntries(JSON.parse(storedTT));
+      } else {
+        setTimeTableEntries([]);
+      }
     } catch (e) {
       console.error('Failed to load data from IndexedDB:', e);
     } finally {
