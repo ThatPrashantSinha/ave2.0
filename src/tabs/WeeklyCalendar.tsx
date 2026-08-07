@@ -80,7 +80,7 @@ export function getClassDuration(startTime: string, endTime: string): string {
 // Helper to extract the venue text after the 2nd '-' (e.g. "Block - VEDANTA - VED5F 510 ComputerLab 5" -> "VED5F 510 ComputerLab 5")
 export function getVenueAfterSecondDash(venueStr?: string): string {
   if (!venueStr) return '';
-  const raw = String(venueStr).trim();
+  const raw = String(venueStr).trim().replace(/\s+/g, ' ');
   if (!raw) return '';
   // Split on dash/hyphen variants
   const parts = raw.split(/\s*[-–—]\s*/);
@@ -1692,7 +1692,7 @@ export function WeeklyCalendar({
                                   ? "border border-ink/40 p-[1.5px] shadow-none bg-paper leading-none" 
                                   : cn(
                                       "border-[2.5px] border-ink shadow-[2px_2px_0px_#1A1A1B] hover:shadow-[4px_4px_0px_#1A1A1B] hover:translate-y-[-1px] active:translate-y-0 active:shadow-none bg-[#FFFEFA]",
-                                      isCompact ? "p-1" : isMedium ? "p-1.5" : "p-2"
+                                      isCompact ? "p-0.5" : isMedium ? "px-1 py-1" : "px-1.5 py-1"
                                     ),
                                 isActiveNow && "ring-2 ring-emerald-600 bg-emerald-50/90 animate-doing-pulse"
                               )}
@@ -1714,22 +1714,22 @@ export function WeeklyCalendar({
                                 <div className="flex flex-col justify-between h-full pl-0.5 pr-0.5 relative z-10">
                                   <div className="flex items-center gap-1 min-w-0">
                                     <span 
-                                      className="font-mono text-[6.5px] font-black uppercase px-0.5 py-0.2 rounded-3xs border text-white shrink-0 leading-none shadow-[0.5px_0.5px_0px_#1A1A1B]"
+                                      className="font-mono text-[6px] font-black uppercase px-0.5 py-0.2 rounded-3xs border text-white shrink-0 leading-none shadow-[0.5px_0.5px_0px_#1A1A1B]"
                                       style={{ backgroundColor: entry.color || '#2563EB', borderColor: '#1A1A1B' }}
                                     >
                                       {compShort}
                                     </span>
-                                    <span className="font-sans font-black text-[8px] md:text-[8.5px] text-ink truncate leading-tight">
+                                    <span className="font-sans font-black text-[7.5px] md:text-[8px] text-ink truncate leading-tight">
                                       {entry.subject}
                                     </span>
                                   </div>
                                   {displayedVenue && (
                                     <div 
-                                      className="flex items-center gap-0.5 text-ink/90 font-mono text-[6px] sm:text-[6.5px] font-bold mt-auto leading-none pt-0.5 w-full min-w-0 overflow-hidden" 
+                                      className="flex items-center gap-0.5 text-ink/90 font-mono text-[5.5px] sm:text-[6px] font-bold mt-auto leading-none pt-0.5 w-full min-w-0 overflow-hidden" 
                                       title={`Venue: ${entry.venue}`}
                                     >
-                                      <MapPin size={6} className="shrink-0 text-subway-red" strokeWidth={2.5} />
-                                      <span className="truncate tracking-tighter font-extrabold block w-full leading-none">
+                                      <MapPin size={5} className="shrink-0 text-subway-red" strokeWidth={2.5} />
+                                      <span className="truncate tracking-[-0.04em] font-black block w-full leading-none">
                                         {displayedVenue}
                                       </span>
                                     </div>
@@ -1741,13 +1741,13 @@ export function WeeklyCalendar({
                                   <div className="flex items-center justify-between gap-1">
                                     <div className="flex items-center gap-1 min-w-0">
                                       <span 
-                                        className="font-mono text-[6.5px] md:text-[7.5px] font-black uppercase px-1 py-0.2 rounded-3xs border text-white shrink-0 leading-none shadow-[0.5px_0.5px_0px_#1A1A1B]"
+                                        className="font-mono text-[6px] md:text-[7px] font-black uppercase px-0.5 py-0.2 rounded-3xs border text-white shrink-0 leading-none shadow-[0.5px_0.5px_0px_#1A1A1B]"
                                         style={{ backgroundColor: entry.color || '#2563EB', borderColor: '#1A1A1B' }}
                                       >
                                         {compType}
                                       </span>
                                       {entry.timeTableCode && (
-                                        <span className="font-mono text-[6px] md:text-[7px] font-bold text-ink/65 uppercase truncate bg-paper-dark border border-ink/20 px-0.5 py-0.2 rounded-3xs hidden sm:inline">
+                                        <span className="font-mono text-[5.5px] md:text-[6.5px] font-bold text-ink/65 uppercase truncate bg-paper-dark border border-ink/20 px-0.5 py-0.2 rounded-3xs hidden sm:inline">
                                           {entry.timeTableCode}
                                         </span>
                                       )}
@@ -1758,19 +1758,19 @@ export function WeeklyCalendar({
                                   </div>
 
                                   {/* Subject Title */}
-                                  <div className="font-sans font-black text-[8.5px] md:text-[10px] text-ink tracking-tight leading-tight line-clamp-2 my-0.5 group-hover/tt:text-subway-blue transition-colors">
+                                  <div className="font-sans font-black text-[8px] md:text-[9.5px] text-ink tracking-tight leading-tight line-clamp-2 my-0.5 group-hover/tt:text-subway-blue transition-colors">
                                     {entry.subject}
                                   </div>
 
-                                  {/* Bottom Row: Venue with text after 2nd '-' (Time removed, small text, 12+ chars visible) */}
+                                  {/* Bottom Row: Venue with text after 2nd '-' (Time removed, small text, maximized visible characters) */}
                                   {displayedVenue ? (
                                     <div 
-                                      className="flex items-center gap-0.5 text-ink font-mono text-[6.5px] sm:text-[7px] md:text-[7.5px] font-bold mt-auto pt-0.5 border-t border-ink/10 w-full min-w-0" 
+                                      className="flex items-center gap-0.5 text-ink font-mono text-[5.8px] sm:text-[6.2px] md:text-[6.8px] font-bold mt-auto pt-0.5 border-t border-ink/10 w-full min-w-0" 
                                       title={`Venue: ${entry.venue}`}
                                     >
-                                      <div className="flex items-center gap-0.5 text-ink/90 bg-stone-100/95 px-0.5 py-0.2 rounded-3xs border border-ink/15 w-full min-w-0 overflow-hidden">
-                                        <MapPin size={6.5} className="shrink-0 text-subway-red" strokeWidth={2.5} />
-                                        <span className="truncate font-black tracking-tighter sm:tracking-tight min-w-0 w-full block leading-none">
+                                      <div className="flex items-center gap-0.5 text-ink/90 bg-stone-100/95 px-0.5 py-[1px] rounded-3xs border border-ink/15 w-full min-w-0 overflow-hidden">
+                                        <MapPin size={5.5} className="shrink-0 text-subway-red" strokeWidth={2.5} />
+                                        <span className="truncate font-black tracking-[-0.04em] sm:tracking-[-0.02em] min-w-0 w-full block leading-none">
                                           {displayedVenue}
                                         </span>
                                       </div>
