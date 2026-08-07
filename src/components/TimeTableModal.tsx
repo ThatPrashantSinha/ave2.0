@@ -446,16 +446,19 @@ export function TimeTableModal({
     return `${mins} min`;
   };
 
-  // Convert 24hr format to 12hr display
+  // Convert 24hr format to 12hr IST display (e.g. "09:00 AM", "01:30 PM")
   const format12Hour = (time24: string) => {
+    if (!time24) return '';
     try {
       const [hStr, mStr] = time24.split(':');
       let h = parseInt(hStr, 10);
-      const m = mStr || '00';
+      if (isNaN(h)) return time24;
+      const m = (mStr || '00').padStart(2, '0');
       const ampm = h >= 12 ? 'PM' : 'AM';
       h = h % 12;
       h = h ? h : 12;
-      return `${h}:${m} ${ampm}`;
+      const formattedHour = String(h).padStart(2, '0');
+      return `${formattedHour}:${m} ${ampm}`;
     } catch (_) {
       return time24;
     }
@@ -609,7 +612,7 @@ export function TimeTableModal({
             {activeClassNow ? (
               <div className="flex items-center gap-1.5 bg-emerald-100 text-emerald-950 border border-emerald-600 px-2 py-0.5 rounded-3xs font-mono text-[9px] font-black uppercase animate-pulse">
                 <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
-                <span>NOW IN SESSION: {activeClassNow.subject} ({activeClassNow.startTime} – {activeClassNow.endTime}) @ {activeClassNow.venue}</span>
+                <span>NOW IN SESSION: {activeClassNow.subject} ({format12Hour(activeClassNow.startTime)} – {format12Hour(activeClassNow.endTime)} IST) @ {activeClassNow.venue}</span>
               </div>
             ) : nextClassToday ? (
               <div className="flex items-center gap-1.5 bg-taxi/25 text-ink border border-ink/40 px-2 py-0.5 rounded-3xs font-mono text-[9px] font-bold uppercase">
@@ -842,7 +845,7 @@ export function TimeTableModal({
                                 borderLeftWidth: '5px',
                                 borderLeftColor: entry.color,
                               }}
-                              title="Click to view full subject details & venue"
+                              title={`${entry.subject} (${format12Hour(entry.startTime)} – ${format12Hour(entry.endTime)} IST) @ ${entry.venue || 'Classroom'}`}
                             >
                               {/* Top accent bar indicator */}
                               <div className="flex items-center justify-between gap-1 mb-1">
@@ -859,14 +862,20 @@ export function TimeTableModal({
                                     </span>
                                   )}
                                 </div>
-                                <span className="font-mono text-[7.5px] font-bold text-ink/60 shrink-0">
-                                  {entry.startTime}
+                                <span className="font-mono text-[7.5px] font-bold text-ink/75 shrink-0 bg-stone-100 px-1 py-0.2 rounded-3xs border border-ink/15">
+                                  {format12Hour(entry.startTime)}
                                 </span>
                               </div>
 
                               {/* SUBJECT NAME (Prominently displayed) */}
                               <div className="font-sans font-black text-xs sm:text-[13px] text-ink uppercase tracking-tight leading-snug py-0.5 break-words group-hover:text-subway-red transition-colors">
                                 {entry.subject}
+                              </div>
+
+                              {/* IST Time Slot Badge */}
+                              <div className="flex items-center gap-1 font-mono text-[7.5px] text-ink/70 font-bold mt-0.5">
+                                <Clock size={9} className="text-subway-red shrink-0" strokeWidth={2.5} />
+                                <span>{format12Hour(entry.startTime)} – {format12Hour(entry.endTime)}</span>
                               </div>
 
                               {/* Course Bucket Tag if available */}
@@ -1141,7 +1150,7 @@ export function TimeTableModal({
                           <thead className="bg-ink text-paper font-mono text-[8px] uppercase font-black sticky top-0 z-10">
                             <tr>
                               <th className="p-2 border-r border-paper/20">Day</th>
-                              <th className="p-2 border-r border-paper/20">Time</th>
+                              <th className="p-2 border-r border-paper/20">Time (IST)</th>
                               <th className="p-2 border-r border-paper/20">Course Title & Code</th>
                               <th className="p-2 border-r border-paper/20">Component</th>
                               <th className="p-2 border-r border-paper/20">Resource Name (Venue)</th>
@@ -1158,7 +1167,7 @@ export function TimeTableModal({
                                   </span>
                                 </td>
                                 <td className="p-2 font-mono text-[9px] font-bold text-ink/80 whitespace-nowrap">
-                                  {item.startTime} – {item.endTime}
+                                  {format12Hour(item.startTime)} – {format12Hour(item.endTime)}
                                 </td>
                                 <td className="p-2">
                                   <div className="flex items-center gap-1.5">
@@ -1304,10 +1313,10 @@ export function TimeTableModal({
                   <div className="bg-paper-dark border-2 border-ink p-2.5 rounded-xs space-y-0.5">
                     <div className="flex items-center gap-1 text-ink/60 font-mono text-[8px] uppercase font-bold">
                       <Clock size={11} />
-                      <span>TIME INTERVAL</span>
+                      <span>TIME INTERVAL (IST)</span>
                     </div>
                     <div className="font-mono font-black text-xs text-ink">
-                      {format12Hour(selectedEntry.startTime)} – {format12Hour(selectedEntry.endTime)}
+                      {format12Hour(selectedEntry.startTime)} – {format12Hour(selectedEntry.endTime)} IST
                     </div>
                     <div className="font-mono text-[8px] text-subway-red font-black">
                       Duration: {getDurationText(selectedEntry.startTime, selectedEntry.endTime)}

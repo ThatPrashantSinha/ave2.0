@@ -2,11 +2,97 @@ import React, { useState, useRef, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, getHours, getMinutes, addHours } from 'date-fns';
 import { Task, Birthday, Habit, TimeTableEntry } from '../types';
 import { cn, toIST } from '../lib/utils';
-import { Clock, Tag, Briefcase, Plus, X, Calendar, Edit, Gift, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Zap, Milestone, Gauge, Activity, Timer, GraduationCap } from 'lucide-react';
+import { 
+  Clock, 
+  Tag, 
+  Briefcase, 
+  Plus, 
+  X, 
+  Calendar, 
+  Edit, 
+  Gift, 
+  Trash2, 
+  ChevronDown, 
+  ChevronLeft, 
+  ChevronRight, 
+  CalendarDays, 
+  Zap, 
+  Milestone, 
+  Gauge, 
+  Activity, 
+  Timer, 
+  GraduationCap, 
+  Eye, 
+  EyeOff, 
+  Layers, 
+  MapPin, 
+  User, 
+  BookOpen, 
+  Award, 
+  CheckCircle2, 
+  Sparkles, 
+  ExternalLink, 
+  Info, 
+  Check, 
+  Building 
+} from 'lucide-react';
 import { AnalogClockPicker } from '../components/AnalogClockPicker';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { SketchPushPin } from '../components/SketchPushPin';
 import { HabitIcon } from '../components/HabitIcon';
+
+// Helper to format 24hr string to 12hr IST time display (e.g. "09:00 AM", "01:30 PM")
+export function format12Hour(time24: string): string {
+  if (!time24) return '';
+  try {
+    const [hStr, mStr] = time24.split(':');
+    let h = parseInt(hStr, 10);
+    if (isNaN(h)) return time24;
+    const m = (mStr || '00').padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    const formattedHour = String(h).padStart(2, '0');
+    return `${formattedHour}:${m} ${ampm}`;
+  } catch (_) {
+    return time24;
+  }
+}
+
+// Helper to compute duration string between two 24hr times (e.g. "1 hr 50 min")
+export function getClassDuration(startTime: string, endTime: string): string {
+  if (!startTime || !endTime) return '';
+  try {
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    const total = (eh * 60 + (em || 0)) - (sh * 60 + (sm || 0));
+    if (total <= 0) return '';
+    const hrs = Math.floor(total / 60);
+    const mins = total % 60;
+    if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
+    if (hrs > 0) return `${hrs} hr`;
+    return `${mins} min`;
+  } catch (_) {
+    return '';
+  }
+}
+
+// Helper to extract the venue text after the 2nd '-' (e.g. "Block - VEDANTA - VED5F 510 ComputerLab 5" -> "VED5F 510 ComputerLab 5")
+export function getVenueAfterSecondDash(venueStr?: string): string {
+  if (!venueStr) return '';
+  const raw = String(venueStr).trim();
+  if (!raw) return '';
+  // Split on dash/hyphen variants
+  const parts = raw.split(/\s*[-–—]\s*/);
+  if (parts.length >= 3) {
+    // Return the text after the 2nd dash
+    return parts.slice(2).join(' - ').trim();
+  }
+  if (parts.length === 2) {
+    return parts[1].trim() || parts[0].trim();
+  }
+  return raw;
+}
 
 interface WeeklyCalendarProps {
   tasks: Task[];
@@ -188,6 +274,97 @@ export function WeeklyCalendar({
   const [pickerMonth, setPickerMonth] = useState<Date>(currentDate);
   const [now, setNow] = useState(toIST(new Date()));
   const [isMinimizedView, setIsMinimizedView] = useState(false);
+
+  // Time Table Visibility & Selection State
+  const [isTimeTableVisible, setIsTimeTableVisible] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('daily_docket_calendar_show_timetable');
+      if (saved !== null) return saved === 'true';
+    } catch (e) {
+      console.error(e);
+    }
+    return true; // Default to visible so college timetable slots immediately appear on the calendar!
+  });
+
+  useEffect(() => {
+    localStorage.setItem('daily_docket_calendar_show_timetable', String(isTimeTableVisible));
+  }, [isTimeTableVisible]);
+
+  const [selectedSubject, setSelectedSubject] = useState<TimeTableEntry | null>(null);
+
+  // Press-and-Hold to toggle timetable visibility
+  const [holdProgress, setHoldProgress] = useState(0);
+  const [isHolding, setIsHolding] = useState(false);
+  const [timeTableToast, setTimeTableToast] = useState<{ message: string; visible: boolean } | null>(null);
+  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const holdProgressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const wasHeldRef = useRef(false);
+
+  const handleHoldStart = (e: React.MouseEvent | React.TouchEvent) => {
+    wasHeldRef.current = false;
+    setIsHolding(true);
+    setHoldProgress(0);
+
+    const startTime = Date.now();
+    const DURATION = 500; // 500ms hold time
+
+    if (holdProgressIntervalRef.current) clearInterval(holdProgressIntervalRef.current);
+    holdProgressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(100, (elapsed / DURATION) * 100);
+      setHoldProgress(progress);
+    }, 20);
+
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = setTimeout(() => {
+      wasHeldRef.current = true;
+      setIsHolding(false);
+      setHoldProgress(0);
+      if (holdProgressIntervalRef.current) clearInterval(holdProgressIntervalRef.current);
+      
+      // Toggle visibility
+      setIsTimeTableVisible(prev => {
+        const next = !prev;
+        setTimeTableToast({
+          message: next ? 'COLLEGE TIMETABLE: VISIBLE ON CALENDAR' : 'COLLEGE TIMETABLE: HIDDEN FROM CALENDAR',
+          visible: true
+        });
+        setTimeout(() => setTimeTableToast(null), 3000);
+        return next;
+      });
+    }, DURATION);
+  };
+
+  const handleHoldEnd = () => {
+    setIsHolding(false);
+    setHoldProgress(0);
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    if (holdProgressIntervalRef.current) clearInterval(holdProgressIntervalRef.current);
+  };
+
+  const handleTimeTableButtonClick = (e: React.MouseEvent) => {
+    if (wasHeldRef.current) {
+      wasHeldRef.current = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    onOpenTimeTable?.();
+  };
+
+  const handleDirectToggleTimeTable = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsTimeTableVisible(prev => {
+      const next = !prev;
+      setTimeTableToast({
+        message: next ? 'COLLEGE TIMETABLE: VISIBLE ON CALENDAR' : 'COLLEGE TIMETABLE: HIDDEN FROM CALENDAR',
+        visible: true
+      });
+      setTimeout(() => setTimeTableToast(null), 3000);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -399,7 +576,7 @@ export function WeeklyCalendar({
 
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Dynamic hour heights sizing: check if any day of this week has a task on this hour (or spanning across it).
+  // Dynamic hour heights sizing: check if any day of this week has a task on this hour (or spanning across it) or timetable entry when visible.
   // Standard height is 85px (expanded to fit details comfortably).
   // Empty height is 30px (shrunk to compress whitespace).
   const { hourHeights, hourTops, totalGridHeight } = React.useMemo(() => {
@@ -422,7 +599,20 @@ export function WeeklyCalendar({
           return sHour === hour;
         });
       });
-      return hasTaskThisHour ? 85 : 30;
+
+      const hasTimeTableThisHour = isTimeTableVisible && weekDays.some(day => {
+        const dNum = day.getDay();
+        return timeTableEntries.some(e => {
+          if (e.dayOfWeek !== dNum) return false;
+          const [shStr] = e.startTime.split(':');
+          const [ehStr] = e.endTime.split(':');
+          const sh = parseInt(shStr, 10);
+          const eh = parseInt(ehStr, 10);
+          return hour >= sh && hour <= eh;
+        });
+      });
+
+      return (hasTaskThisHour || hasTimeTableThisHour) ? 85 : 30;
     });
 
     const tops: number[] = [];
@@ -437,7 +627,7 @@ export function WeeklyCalendar({
       hourTops: tops,
       totalGridHeight: currentTop,
     };
-  }, [expandedTasksForWeek, weekDays, isMinimizedView]);
+  }, [expandedTasksForWeek, weekDays, isMinimizedView, isTimeTableVisible, timeTableEntries]);
 
   const getNowYPosition = () => {
     const hh = now.getHours();
@@ -731,15 +921,76 @@ export function WeeklyCalendar({
           </div>
         </h2>
         <div className="flex flex-col items-end gap-2 mb-1 shrink-0">
+          {/* Notification Toast for Timetable Visibility Toggle */}
+          {timeTableToast && (
+            <div className="fixed top-3 right-3 z-50 bg-ink text-paper border-2 border-taxi px-3 py-1.5 font-mono text-[10px] font-black uppercase shadow-[4px_4px_0px_#F7C331] flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+              <GraduationCap size={14} className="text-taxi animate-bounce" />
+              <span>{timeTableToast.message}</span>
+            </div>
+          )}
+
           {onOpenTimeTable && (
-            <button 
-              type="button"
-              onClick={onOpenTimeTable} 
-              className="px-2.5 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] bg-paper text-ink transition-all shrink-0 flex items-center gap-1.5 select-none cursor-pointer group"
-              title="Open College Time Table"
-            >
-              <GraduationCap size={13} strokeWidth={2.5} className="text-subway-red group-hover:text-taxi transition-colors" /> TIME TABLE ({timeTableEntries.length})
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Primary Time Table Button with Hold to Toggle */}
+              <button 
+                type="button"
+                onClick={handleTimeTableButtonClick}
+                onMouseDown={handleHoldStart}
+                onMouseUp={handleHoldEnd}
+                onMouseLeave={handleHoldEnd}
+                onTouchStart={handleHoldStart}
+                onTouchEnd={handleHoldEnd}
+                className={cn(
+                  "relative overflow-hidden px-2.5 py-1.5 border-[3px] border-ink font-mono text-[10px] uppercase font-bold hover:bg-ink hover:text-paper shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] transition-all shrink-0 flex items-center gap-1.5 select-none cursor-pointer group",
+                  isTimeTableVisible ? "bg-paper text-ink" : "bg-stone-200 text-ink/70"
+                )}
+                title="Click: Open Time Table Manager • Press & Hold (0.5s) to toggle on Calendar"
+              >
+                {/* Hold Progress Fill Effect */}
+                {isHolding && (
+                  <div 
+                    className="absolute inset-0 bg-subway-red/25 pointer-events-none transition-all duration-75"
+                    style={{ width: `${holdProgress}%` }}
+                  />
+                )}
+
+                <GraduationCap size={13} strokeWidth={2.5} className="text-subway-red group-hover:text-taxi transition-colors shrink-0" /> 
+                <span className="font-black">TIME TABLE ({timeTableEntries.length})</span>
+
+                {/* Visibility Status Badge */}
+                <span className={cn(
+                  "font-mono text-[8px] font-black px-1 py-0.2 border shrink-0 transition-colors",
+                  isTimeTableVisible 
+                    ? "bg-emerald-100 text-emerald-950 border-emerald-500 group-hover:bg-emerald-950 group-hover:text-emerald-300" 
+                    : "bg-stone-300 text-stone-700 border-stone-400 group-hover:bg-stone-900 group-hover:text-stone-300"
+                )}>
+                  {isTimeTableVisible ? 'ON' : 'OFF'}
+                </span>
+              </button>
+
+              {/* Instant 1-Click Visibility Toggle Eye Button */}
+              <button
+                type="button"
+                onClick={handleDirectToggleTimeTable}
+                className={cn(
+                  "px-2 py-1.5 border-[3px] border-ink font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] transition-all shrink-0 flex items-center gap-1 select-none cursor-pointer hover:bg-ink hover:text-paper",
+                  isTimeTableVisible ? "bg-taxi text-ink" : "bg-paper text-ink/60"
+                )}
+                title={isTimeTableVisible ? "Click to hide timetable slots from calendar" : "Click to show timetable slots on calendar"}
+              >
+                {isTimeTableVisible ? (
+                  <>
+                    <Eye size={12} strokeWidth={2.5} className="text-ink shrink-0" />
+                    <span className="hidden sm:inline text-[8.5px]">VISIBLE</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeOff size={12} strokeWidth={2.5} className="text-ink/60 shrink-0" />
+                    <span className="hidden sm:inline text-[8.5px]">HIDDEN</span>
+                  </>
+                )}
+              </button>
+            </div>
           )}
           <button 
             type="button"
@@ -1267,7 +1518,7 @@ export function WeeklyCalendar({
                             className={cn(
                               "absolute z-10 overflow-hidden transition-all select-none border-ink",
                               isMinimizedView 
-                                ? "border p-[1.2px] text-[6.5px] shadow-none cursor-default leading-none"
+                                ? "border p-[1.2px] text-[6.5px] shadow-none cursor-default leading-none" 
                                 : cn("border-[3px] shadow-[2px_2px_0px_#1A1A1B] cursor-pointer hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_#1A1A1B]", isVerySmall ? "p-0.5" : isMediumSmall ? "p-1" : "p-1.5"),
                               getEventColor(task),
                               task.status === 'in-progress' && "animate-doing-pulse"
@@ -1382,6 +1633,155 @@ export function WeeklyCalendar({
                           )}
                         </div>
                       );})}
+
+                      {/* College Time Table Schedule Subject Slots */}
+                      {isTimeTableVisible && (() => {
+                        const dayOfWeekNum = day.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+                        const dayEntries = (timeTableEntries || []).filter(e => e.dayOfWeek === dayOfWeekNum);
+
+                        return dayEntries.map(entry => {
+                          const [shStr, smStr] = entry.startTime.split(':');
+                          const sh = parseInt(shStr, 10);
+                          const sm = parseInt(smStr || '0', 10);
+                          const [ehStr, emStr] = entry.endTime.split(':');
+                          const eh = parseInt(ehStr, 10);
+                          const em = parseInt(emStr || '0', 10);
+
+                          const baseTop = hourTops[sh] || 0;
+                          const startHourHeight = hourHeights[sh] || 85;
+                          const top = baseTop + (sm / 60) * startHourHeight;
+
+                          const endBaseTop = hourTops[eh] || 0;
+                          const endHourHeight = hourHeights[eh] || 85;
+                          const endTop = endBaseTop + (em / 60) * endHourHeight;
+                          const height = Math.max(26, endTop - top - 3);
+
+                          const isCompact = height < 38;
+                          const isMedium = height >= 38 && height < 65;
+
+                          const compType = entry.component || 'Lecture';
+                          const compShort = compType.substring(0, 3).toUpperCase();
+                          const displayedVenue = getVenueAfterSecondDash(entry.venue);
+
+                          const nowDay = now.getDay();
+                          const isToday = dayOfWeekNum === nowDay;
+                          const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                          const startMinutes = sh * 60 + sm;
+                          const endMinutes = eh * 60 + em;
+                          const isActiveNow = isToday && nowMinutes >= startMinutes && nowMinutes <= endMinutes;
+
+                          return (
+                            <div
+                              key={`cal-tt-${entry.id}-${day.toISOString()}`}
+                              onClick={(e) => {
+                                if (isMinimizedView) return;
+                                e.stopPropagation();
+                                setSelectedSubject(entry);
+                              }}
+                              style={{
+                                top: `${top}px`,
+                                height: `${height}px`,
+                                left: '2px',
+                                right: '2px',
+                                borderLeftColor: entry.color || '#2563EB',
+                                borderLeftWidth: isMinimizedView ? '3px' : '5px',
+                              }}
+                              className={cn(
+                                "absolute z-20 select-none transition-all cursor-pointer group/tt overflow-hidden",
+                                isMinimizedView 
+                                  ? "border border-ink/40 p-[1.5px] shadow-none bg-paper leading-none" 
+                                  : cn(
+                                      "border-[2.5px] border-ink shadow-[2px_2px_0px_#1A1A1B] hover:shadow-[4px_4px_0px_#1A1A1B] hover:translate-y-[-1px] active:translate-y-0 active:shadow-none bg-[#FFFEFA]",
+                                      isCompact ? "p-1" : isMedium ? "p-1.5" : "p-2"
+                                    ),
+                                isActiveNow && "ring-2 ring-emerald-600 bg-emerald-50/90 animate-doing-pulse"
+                              )}
+                              title={`${entry.subject} (${format12Hour(entry.startTime)} – ${format12Hour(entry.endTime)} IST) @ ${entry.venue || 'Classroom'} — Click for details`}
+                            >
+                              {/* Subtle background academic graduation cap watermark */}
+                              <div className="absolute right-1 bottom-0.5 opacity-[0.08] group-hover/tt:opacity-20 pointer-events-none transition-opacity">
+                                <GraduationCap size={isCompact ? 16 : 26} className="text-ink" />
+                              </div>
+
+                              {isMinimizedView ? (
+                                <div className="flex items-center h-full pl-0.5 pr-0.5 text-[6.5px] font-black text-ink overflow-hidden select-none leading-none">
+                                  <span className="truncate w-full block">
+                                    <span className="font-mono font-bold opacity-60 mr-0.5">{compShort}:</span>
+                                    {entry.subject}
+                                  </span>
+                                </div>
+                              ) : isCompact ? (
+                                <div className="flex flex-col justify-between h-full pl-0.5 pr-0.5 relative z-10">
+                                  <div className="flex items-center gap-1 min-w-0">
+                                    <span 
+                                      className="font-mono text-[6.5px] font-black uppercase px-0.5 py-0.2 rounded-3xs border text-white shrink-0 leading-none shadow-[0.5px_0.5px_0px_#1A1A1B]"
+                                      style={{ backgroundColor: entry.color || '#2563EB', borderColor: '#1A1A1B' }}
+                                    >
+                                      {compShort}
+                                    </span>
+                                    <span className="font-sans font-black text-[8px] md:text-[8.5px] text-ink truncate leading-tight">
+                                      {entry.subject}
+                                    </span>
+                                  </div>
+                                  {displayedVenue && (
+                                    <div 
+                                      className="flex items-center gap-0.5 text-ink/90 font-mono text-[6px] sm:text-[6.5px] font-bold mt-auto leading-none pt-0.5 w-full min-w-0 overflow-hidden" 
+                                      title={`Venue: ${entry.venue}`}
+                                    >
+                                      <MapPin size={6} className="shrink-0 text-subway-red" strokeWidth={2.5} />
+                                      <span className="truncate tracking-tighter font-extrabold block w-full leading-none">
+                                        {displayedVenue}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex flex-col justify-between h-full pl-0.5 relative z-10">
+                                  {/* Top Row: Component Pill + Course Code / Active Badge (Time removed) */}
+                                  <div className="flex items-center justify-between gap-1">
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      <span 
+                                        className="font-mono text-[6.5px] md:text-[7.5px] font-black uppercase px-1 py-0.2 rounded-3xs border text-white shrink-0 leading-none shadow-[0.5px_0.5px_0px_#1A1A1B]"
+                                        style={{ backgroundColor: entry.color || '#2563EB', borderColor: '#1A1A1B' }}
+                                      >
+                                        {compType}
+                                      </span>
+                                      {entry.timeTableCode && (
+                                        <span className="font-mono text-[6px] md:text-[7px] font-bold text-ink/65 uppercase truncate bg-paper-dark border border-ink/20 px-0.5 py-0.2 rounded-3xs hidden sm:inline">
+                                          {entry.timeTableCode}
+                                        </span>
+                                      )}
+                                      {isActiveNow && (
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping shrink-0" title="Class active in session now" />
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Subject Title */}
+                                  <div className="font-sans font-black text-[8.5px] md:text-[10px] text-ink tracking-tight leading-tight line-clamp-2 my-0.5 group-hover/tt:text-subway-blue transition-colors">
+                                    {entry.subject}
+                                  </div>
+
+                                  {/* Bottom Row: Venue with text after 2nd '-' (Time removed, small text, 12+ chars visible) */}
+                                  {displayedVenue ? (
+                                    <div 
+                                      className="flex items-center gap-0.5 text-ink font-mono text-[6.5px] sm:text-[7px] md:text-[7.5px] font-bold mt-auto pt-0.5 border-t border-ink/10 w-full min-w-0" 
+                                      title={`Venue: ${entry.venue}`}
+                                    >
+                                      <div className="flex items-center gap-0.5 text-ink/90 bg-stone-100/95 px-0.5 py-0.2 rounded-3xs border border-ink/15 w-full min-w-0 overflow-hidden">
+                                        <MapPin size={6.5} className="shrink-0 text-subway-red" strokeWidth={2.5} />
+                                        <span className="truncate font-black tracking-tighter sm:tracking-tight min-w-0 w-full block leading-none">
+                                          {displayedVenue}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        });
+                      })()}
 
                       {/* Real-time Current Position indicator line & badges */}
                       {(() => {
@@ -2422,6 +2822,266 @@ export function WeeklyCalendar({
                   SAVE ANCHOR
                 </button>
               </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* SELECTED COLLEGE TIMETABLE SUBJECT DETAIL MODAL */}
+      {selectedSubject && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4 select-none animate-in fade-in duration-150">
+          <div 
+            className="absolute inset-0 bg-ink/75 backdrop-blur-sm"
+            onClick={() => setSelectedSubject(null)}
+          />
+          
+          <div className="relative w-full max-w-lg bg-[#FFFEFA] border-[6px] border-ink shadow-[10px_10px_0px_#1A1A1B] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 text-ink max-h-[90vh]">
+            
+            {/* Subject Header Banner */}
+            <div 
+              className="p-4 sm:p-5 flex justify-between items-start border-b-[5px] border-ink text-white relative shrink-0"
+              style={{ backgroundColor: selectedSubject.color || '#2563EB' }}
+            >
+              <div className="flex items-start gap-3 min-w-0 pr-4">
+                <div className="w-11 h-11 rounded-sm bg-white/20 border-2 border-white/60 flex items-center justify-center shrink-0 shadow-[2px_2px_0px_rgba(0,0,0,0.3)]">
+                  <GraduationCap size={24} className="text-white" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-mono text-[9px] font-black uppercase px-1.5 py-0.5 bg-paper text-ink border border-ink rounded-3xs shadow-[1px_1px_0px_rgba(0,0,0,0.2)]">
+                      {selectedSubject.component || 'Lecture'}
+                    </span>
+                    {selectedSubject.timeTableCode && (
+                      <span className="font-mono text-[9px] font-bold uppercase tracking-wider text-white/90 bg-black/30 px-1.5 py-0.5 border border-white/30 rounded-3xs">
+                        {selectedSubject.timeTableCode}
+                      </span>
+                    )}
+                    {selectedSubject.credits && (
+                      <span className="font-mono text-[9px] font-bold text-white/90 bg-white/20 px-1.5 py-0.5 border border-white/30 rounded-3xs">
+                        {selectedSubject.credits} Credits
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="font-sans font-black text-xl sm:text-2xl text-white tracking-tight leading-snug mt-1 break-words">
+                    {selectedSubject.subject}
+                  </h2>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedSubject(null)}
+                className="w-8 h-8 rounded-sm bg-white/20 hover:bg-white hover:text-ink text-white border-2 border-white/60 flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-[2px_2px_0px_rgba(0,0,0,0.2)]"
+                title="Close subject dossier"
+              >
+                <X size={18} strokeWidth={3} />
+              </button>
+            </div>
+
+            {/* Modal Scrollable Content Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 font-sans text-ink">
+              
+              {/* Timing & Live Status Banner */}
+              {(() => {
+                const daysNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const dayName = daysNames[selectedSubject.dayOfWeek] || 'Scheduled Day';
+                const duration = getClassDuration(selectedSubject.startTime, selectedSubject.endTime);
+                
+                const nowDay = now.getDay();
+                const isToday = selectedSubject.dayOfWeek === nowDay;
+                const [shStr, smStr] = selectedSubject.startTime.split(':');
+                const [ehStr, emStr] = selectedSubject.endTime.split(':');
+                const sh = parseInt(shStr, 10);
+                const sm = parseInt(smStr || '0', 10);
+                const eh = parseInt(ehStr, 10);
+                const em = parseInt(emStr || '0', 10);
+                const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                const startMinutes = sh * 60 + sm;
+                const endMinutes = eh * 60 + em;
+                const isActiveNow = isToday && nowMinutes >= startMinutes && nowMinutes <= endMinutes;
+                const isUpcomingToday = isToday && nowMinutes < startMinutes;
+                const isFinishedToday = isToday && nowMinutes > endMinutes;
+
+                return (
+                  <div className={cn(
+                    "border-[3px] border-ink p-3.5 shadow-[3px_3px_0px_#1A1A1B] flex flex-col gap-2",
+                    isActiveNow ? "bg-emerald-50 border-emerald-700" : isToday ? "bg-taxi/15" : "bg-paper-dark"
+                  )}>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 font-mono text-[10px] font-black uppercase tracking-widest text-ink/75">
+                        <CalendarDays size={13} className="text-subway-red" />
+                        <span>EVERY {dayName.toUpperCase()}</span>
+                      </div>
+                      {isActiveNow ? (
+                        <span className="font-mono text-[9px] font-black px-2 py-0.5 bg-emerald-600 text-white rounded-3xs animate-pulse flex items-center gap-1 shadow-[1px_1px_0px_#1A1A1B]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                          LIVE IN SESSION NOW
+                        </span>
+                      ) : isUpcomingToday ? (
+                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 bg-taxi text-ink border border-ink rounded-3xs shadow-[1px_1px_0px_#1A1A1B]">
+                          UPCOMING TODAY
+                        </span>
+                      ) : isFinishedToday ? (
+                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 bg-stone-200 text-stone-700 border border-stone-400 rounded-3xs">
+                          CONCLUDED TODAY
+                        </span>
+                      ) : (
+                        <span className="font-mono text-[9px] font-bold px-2 py-0.5 bg-paper text-ink/70 border border-ink/30 rounded-3xs">
+                          WEEKLY SCHEDULE
+                        </span>
+                      )}
+                    </div>
+
+                    {/* High-contrast Time Display */}
+                    <div className="flex items-baseline justify-between gap-2 pt-1 border-t border-ink/15">
+                      <div className="flex items-center gap-2">
+                        <Clock size={16} className="text-subway-red shrink-0" strokeWidth={2.5} />
+                        <span className="font-mono font-black text-base sm:text-lg text-ink">
+                          {format12Hour(selectedSubject.startTime)} – {format12Hour(selectedSubject.endTime)}
+                        </span>
+                        <span className="font-mono text-[9px] font-bold px-1 bg-stone-200 text-stone-700 border border-stone-400">
+                          IST
+                        </span>
+                      </div>
+                      {duration && (
+                        <span className="font-mono text-[10px] font-bold text-ink/70 bg-paper px-1.5 py-0.5 border border-ink/20">
+                          {duration}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Academic Details 2-Column Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                
+                {/* Venue & Location */}
+                <div className="border-[3px] border-ink p-3 bg-paper shadow-[3px_3px_0px_#1A1A1B] flex flex-col justify-between">
+                  <span className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/60 flex items-center gap-1">
+                    <MapPin size={11} className="text-subway-red" />
+                    VENUE / CLASSROOM
+                  </span>
+                  <div className="font-sans font-black text-sm sm:text-base text-ink mt-1">
+                    {selectedSubject.venue || 'Campus Main Hall / Class'}
+                  </div>
+                  {selectedSubject.building && (
+                    <span className="font-mono text-[9px] font-bold text-ink/65 mt-1 block truncate">
+                      Building: {selectedSubject.building}
+                    </span>
+                  )}
+                </div>
+
+                {/* Instructor / Faculty */}
+                <div className="border-[3px] border-ink p-3 bg-paper shadow-[3px_3px_0px_#1A1A1B] flex flex-col justify-between">
+                  <span className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/60 flex items-center gap-1">
+                    <User size={11} className="text-subway-blue" />
+                    FACULTY / INSTRUCTOR
+                  </span>
+                  <div className="font-sans font-black text-sm sm:text-base text-ink mt-1 truncate">
+                    {selectedSubject.instructor || 'Department Faculty'}
+                  </div>
+                  {selectedSubject.department && (
+                    <span className="font-mono text-[9px] font-bold text-ink/65 mt-1 block truncate">
+                      Dept: {selectedSubject.department}
+                    </span>
+                  )}
+                </div>
+
+                {/* Course Classification */}
+                {selectedSubject.bucket && (
+                  <div className="border-[3px] border-ink p-3 bg-paper shadow-[3px_3px_0px_#1A1A1B] flex flex-col justify-between">
+                    <span className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/60 flex items-center gap-1">
+                      <BookOpen size={11} className="text-subway-green" />
+                      ACADEMIC BUCKET / TRACK
+                    </span>
+                    <div className="font-sans font-black text-sm text-ink mt-1">
+                      {selectedSubject.bucket}
+                    </div>
+                  </div>
+                )}
+
+                {/* Section / Batch */}
+                {selectedSubject.section && (
+                  <div className="border-[3px] border-ink p-3 bg-paper shadow-[3px_3px_0px_#1A1A1B] flex flex-col justify-between">
+                    <span className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/60 flex items-center gap-1">
+                      <Award size={11} className="text-taxi" />
+                      SECTION / BATCH
+                    </span>
+                    <div className="font-mono font-black text-sm text-ink mt-1">
+                      {selectedSubject.section}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Syllabus / Notes Dossier */}
+              {selectedSubject.notes && (
+                <div className="border-[3px] border-ink p-3 bg-paper-dark shadow-[3px_3px_0px_#1A1A1B]">
+                  <span className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/60 flex items-center gap-1 mb-1">
+                    <Info size={11} className="text-ink/70" />
+                    SUBJECT DOSSIER & NOTES
+                  </span>
+                  <p className="font-mono text-xs font-bold text-ink whitespace-pre-wrap leading-relaxed">
+                    {selectedSubject.notes}
+                  </p>
+                </div>
+              )}
+
+            </div>
+
+            {/* Modal Action Buttons Footer */}
+            <div className="p-3 sm:p-4 bg-paper-dark border-t-[4px] border-ink flex items-center justify-between gap-2 flex-wrap shrink-0">
+              <div className="flex items-center gap-2">
+                {/* Create Task Pre-filled */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetDayDate = weekDays.find(d => d.getDay() === selectedSubject.dayOfWeek) || currentDate;
+                    const dateStr = format(targetDayDate, 'yyyy-MM-dd');
+                    
+                    setPrefilledValues({
+                      startDate: dateStr,
+                      endDate: dateStr,
+                      time: selectedSubject.startTime,
+                      endTime: selectedSubject.endTime,
+                    });
+                    setEditingTask(null);
+                    setSelectedSubject(null);
+                    setIsDrawerOpen(true);
+                  }}
+                  className="px-3 py-2 bg-ink text-paper hover:bg-taxi hover:text-ink font-mono text-[10px] font-black uppercase border-[3px] border-ink shadow-[2.5px_2.5px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Create a study task/assignment linked to this class slot"
+                >
+                  <Plus size={13} strokeWidth={3} />
+                  <span>CREATE STUDY TASK</span>
+                </button>
+
+                {/* Open full Timetable manager */}
+                {onOpenTimeTable && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSubject(null);
+                      onOpenTimeTable();
+                    }}
+                    className="px-2.5 py-2 bg-paper text-ink hover:bg-paper-dark font-mono text-[10px] font-black uppercase border-[3px] border-ink shadow-[2.5px_2.5px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] transition-all flex items-center gap-1.5 cursor-pointer"
+                    title="Open full timetable manager modal"
+                  >
+                    <ExternalLink size={12} strokeWidth={2.5} />
+                    <span>TIMETABLE</span>
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedSubject(null)}
+                className="px-4 py-2 bg-paper text-ink font-mono text-[10px] font-black uppercase border-[3px] border-ink shadow-[2.5px_2.5px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] hover:bg-paper-dark transition-all cursor-pointer ml-auto"
+              >
+                DISMISS
+              </button>
             </div>
 
           </div>
