@@ -20,6 +20,9 @@ export default function App() {
     habits, 
     birthdays, 
     timeTableEntries,
+    semesterConfig,
+    attendanceRecords,
+    subjectManualAttendance,
     addTask, 
     toggleTaskStatus, 
     deleteTask, 
@@ -35,6 +38,13 @@ export default function App() {
     deleteTimeTableEntry,
     resetTimeTable,
     importTimeTableEntries,
+    updateSemesterConfig,
+    markAttendance,
+    markDayAll,
+    quickAdjustSubjectAttendance,
+    deleteAttendanceRecord,
+    resetAttendanceToSample,
+    clearAttendanceRecords,
     refreshStore 
   } = useStore();
 
@@ -102,6 +112,16 @@ export default function App() {
           deleteEntry={deleteTimeTableEntry}
           resetToSample={() => resetTimeTable()}
           importEntries={importTimeTableEntries}
+          semesterConfig={semesterConfig}
+          attendanceRecords={attendanceRecords}
+          subjectManualAttendance={subjectManualAttendance}
+          onUpdateSemesterConfig={updateSemesterConfig}
+          onMarkAttendance={markAttendance}
+          onMarkDayAll={markDayAll}
+          onQuickAdjust={quickAdjustSubjectAttendance}
+          onDeleteAttendanceRecord={deleteAttendanceRecord}
+          onResetAttendanceToSample={resetAttendanceToSample}
+          onClearAllAttendance={clearAttendanceRecords}
         />
     </div>
   );

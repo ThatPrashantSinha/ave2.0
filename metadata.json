@@ -1,6 +1,6 @@
 {
   "name": "Ave",
-  "description": "Daily Disciplines and Routines Tracker",
+  "description": "Daily Disciplines, Routines Tracker, College Timetable Matrix, and Attendance Tracker",
   "requestFramePermissions": [
     "geolocation"
   ],

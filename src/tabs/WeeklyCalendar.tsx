@@ -352,20 +352,6 @@ export function WeeklyCalendar({
     onOpenTimeTable?.();
   };
 
-  const handleDirectToggleTimeTable = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setIsTimeTableVisible(prev => {
-      const next = !prev;
-      setTimeTableToast({
-        message: next ? 'COLLEGE TIMETABLE: VISIBLE ON CALENDAR' : 'COLLEGE TIMETABLE: HIDDEN FROM CALENDAR',
-        visible: true
-      });
-      setTimeout(() => setTimeTableToast(null), 3000);
-      return next;
-    });
-  };
-
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(toIST(new Date()));
@@ -966,29 +952,6 @@ export function WeeklyCalendar({
                 )}>
                   {isTimeTableVisible ? 'ON' : 'OFF'}
                 </span>
-              </button>
-
-              {/* Instant 1-Click Visibility Toggle Eye Button */}
-              <button
-                type="button"
-                onClick={handleDirectToggleTimeTable}
-                className={cn(
-                  "px-2 py-1.5 border-[3px] border-ink font-mono text-[10px] font-black uppercase shadow-[3px_3px_0px_#1A1A1B] active:shadow-none active:translate-y-[3px] active:translate-x-[3px] transition-all shrink-0 flex items-center gap-1 select-none cursor-pointer hover:bg-ink hover:text-paper",
-                  isTimeTableVisible ? "bg-taxi text-ink" : "bg-paper text-ink/60"
-                )}
-                title={isTimeTableVisible ? "Click to hide timetable slots from calendar" : "Click to show timetable slots on calendar"}
-              >
-                {isTimeTableVisible ? (
-                  <>
-                    <Eye size={12} strokeWidth={2.5} className="text-ink shrink-0" />
-                    <span className="hidden sm:inline text-[8.5px]">VISIBLE</span>
-                  </>
-                ) : (
-                  <>
-                    <EyeOff size={12} strokeWidth={2.5} className="text-ink/60 shrink-0" />
-                    <span className="hidden sm:inline text-[8.5px]">HIDDEN</span>
-                  </>
-                )}
               </button>
             </div>
           )}

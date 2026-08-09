@@ -1,7 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Task, Habit, TaskStatus, Birthday, TimeTableEntry } from './types';
+import { 
+  Task, 
+  Habit, 
+  TaskStatus, 
+  Birthday, 
+  TimeTableEntry, 
+  AttendanceRecord, 
+  AttendanceStatus, 
+  SemesterConfig, 
+  SubjectManualAttendance 
+} from './types';
 import { addDays, subDays, format } from 'date-fns';
 import { toIST } from './lib/utils';
+import { 
+  DEFAULT_SEMESTER_CONFIG, 
+  generateSampleAttendanceRecords 
+} from './lib/attendanceUtils';
 import { 
   seedDBIfEmpty, 
   getTasksFromDB, 
@@ -150,9 +164,12 @@ export function useStore() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
   const [timeTableEntries, setTimeTableEntries] = useState<TimeTableEntry[]>([]);
+  const [semesterConfig, setSemesterConfig] = useState<SemesterConfig>(DEFAULT_SEMESTER_CONFIG);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [subjectManualAttendance, setSubjectManualAttendance] = useState<Record<string, SubjectManualAttendance>>({});
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load birthdays and timetable on startup
+  // Load birthdays, timetable, semester config & attendance on startup
   useEffect(() => {
     try {
       const storedBday = localStorage.getItem('daily_docket_birthdays');
@@ -163,10 +180,12 @@ export function useStore() {
       console.error('Failed to parse birthdays from localStorage:', e);
     }
 
+    let loadedTT: TimeTableEntry[] = SAMPLE_TIMETABLE_ENTRIES;
     try {
       const storedTT = localStorage.getItem('daily_docket_timetable');
       if (storedTT) {
-        setTimeTableEntries(JSON.parse(storedTT));
+        loadedTT = JSON.parse(storedTT);
+        setTimeTableEntries(loadedTT);
       } else {
         // Initialize with realistic college semester timetable
         setTimeTableEntries(SAMPLE_TIMETABLE_ENTRIES);
@@ -174,6 +193,42 @@ export function useStore() {
       }
     } catch (e) {
       console.error('Failed to parse timetable from localStorage:', e);
+    }
+
+    let loadedConfig = DEFAULT_SEMESTER_CONFIG;
+    try {
+      const storedConfig = localStorage.getItem('daily_docket_semester_config');
+      if (storedConfig) {
+        loadedConfig = JSON.parse(storedConfig);
+        setSemesterConfig(loadedConfig);
+      } else {
+        localStorage.setItem('daily_docket_semester_config', JSON.stringify(DEFAULT_SEMESTER_CONFIG));
+      }
+    } catch (e) {
+      console.error('Failed to parse semester config from localStorage:', e);
+    }
+
+    try {
+      const storedAtt = localStorage.getItem('daily_docket_attendance_records');
+      if (storedAtt) {
+        setAttendanceRecords(JSON.parse(storedAtt));
+      } else {
+        // Generate realistic initial attendance based on timetable and semester start date
+        const initialRecords = generateSampleAttendanceRecords(loadedTT, loadedConfig.startDate);
+        setAttendanceRecords(initialRecords);
+        localStorage.setItem('daily_docket_attendance_records', JSON.stringify(initialRecords));
+      }
+    } catch (e) {
+      console.error('Failed to parse attendance records from localStorage:', e);
+    }
+
+    try {
+      const storedManual = localStorage.getItem('daily_docket_attendance_manual');
+      if (storedManual) {
+        setSubjectManualAttendance(JSON.parse(storedManual));
+      }
+    } catch (e) {
+      console.error('Failed to parse manual attendance from localStorage:', e);
     }
   }, []);
 
@@ -234,6 +289,148 @@ export function useStore() {
       localStorage.setItem('daily_docket_timetable', JSON.stringify(updated));
       return updated;
     });
+  };
+
+  // Attendance functions
+  const updateSemesterConfig = (newConfig: Partial<SemesterConfig>) => {
+    setSemesterConfig(prev => {
+      const updated = { ...prev, ...newConfig };
+      localStorage.setItem('daily_docket_semester_config', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const markAttendance = (
+    date: string, 
+    subject: string, 
+    status: AttendanceStatus, 
+    timeTableEntryId?: string, 
+    note?: string,
+    code?: string,
+    component?: string
+  ) => {
+    setAttendanceRecords(prev => {
+      const existingIdx = prev.findIndex(r => 
+        r.date === date && (
+          (timeTableEntryId && r.timeTableEntryId === timeTableEntryId) ||
+          (!timeTableEntryId && r.subject.trim().toLowerCase() === subject.trim().toLowerCase())
+        )
+      );
+
+      let updated: AttendanceRecord[];
+      if (existingIdx >= 0) {
+        updated = [...prev];
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          status,
+          note: note !== undefined ? note : updated[existingIdx].note,
+          timestamp: Date.now()
+        };
+      } else {
+        const newRecord: AttendanceRecord = {
+          id: `att_${date}_${timeTableEntryId || Math.random().toString(36).substring(7)}`,
+          date,
+          subject,
+          timeTableEntryId,
+          code,
+          component,
+          status,
+          note,
+          timestamp: Date.now()
+        };
+        updated = [newRecord, ...prev];
+      }
+
+      localStorage.setItem('daily_docket_attendance_records', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const markDayAll = (date: string, status: AttendanceStatus) => {
+    let dayOfWeek = 0;
+    try {
+      const d = new Date(date + 'T00:00:00');
+      dayOfWeek = d.getDay();
+    } catch (e) {
+      dayOfWeek = 1;
+    }
+
+    const dayEntries = timeTableEntries.filter(e => e.dayOfWeek === dayOfWeek);
+    if (dayEntries.length === 0) return;
+
+    setAttendanceRecords(prev => {
+      let updated = [...prev];
+      dayEntries.forEach(entry => {
+        const existingIdx = updated.findIndex(r => 
+          r.date === date && (r.timeTableEntryId === entry.id || r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase())
+        );
+
+        if (existingIdx >= 0) {
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            status,
+            timestamp: Date.now()
+          };
+        } else {
+          updated.unshift({
+            id: `att_${date}_${entry.id}`,
+            date,
+            subject: entry.subject,
+            timeTableEntryId: entry.id,
+            code: entry.code,
+            component: entry.component || entry.type,
+            status,
+            timestamp: Date.now()
+          });
+        }
+      });
+
+      localStorage.setItem('daily_docket_attendance_records', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const quickAdjustSubjectAttendance = (subject: string, deltaPresent: number, deltaAbsent: number) => {
+    setSubjectManualAttendance(prev => {
+      const key = subject.trim();
+      const current = prev[key] || { subject: key, extraPresent: 0, extraAbsent: 0 };
+      const updatedMap = {
+        ...prev,
+        [key]: {
+          subject: key,
+          extraPresent: Math.max(0, current.extraPresent + deltaPresent),
+          extraAbsent: Math.max(0, current.extraAbsent + deltaAbsent)
+        }
+      };
+      localStorage.setItem('daily_docket_attendance_manual', JSON.stringify(updatedMap));
+      return updatedMap;
+    });
+  };
+
+  const deleteAttendanceRecord = (id: string) => {
+    setAttendanceRecords(prev => {
+      const updated = prev.filter(r => r.id !== id);
+      localStorage.setItem('daily_docket_attendance_records', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const clearAttendanceRecords = () => {
+    setAttendanceRecords([]);
+    setSubjectManualAttendance({});
+    localStorage.removeItem('daily_docket_attendance_records');
+    localStorage.removeItem('daily_docket_attendance_manual');
+  };
+
+  const resetAttendanceToSample = () => {
+    const sample = generateSampleAttendanceRecords(
+      timeTableEntries.length > 0 ? timeTableEntries : SAMPLE_TIMETABLE_ENTRIES,
+      semesterConfig.startDate
+    );
+    setAttendanceRecords(sample);
+    setSubjectManualAttendance({});
+    localStorage.setItem('daily_docket_attendance_records', JSON.stringify(sample));
+    localStorage.removeItem('daily_docket_attendance_manual');
   };
 
   const loadData = useCallback(async () => {
@@ -645,6 +842,9 @@ export function useStore() {
     habits,
     birthdays,
     timeTableEntries,
+    semesterConfig,
+    attendanceRecords,
+    subjectManualAttendance,
     isLoading,
     addTask,
     toggleTaskStatus,
@@ -661,6 +861,13 @@ export function useStore() {
     deleteTimeTableEntry,
     resetTimeTable,
     importTimeTableEntries,
+    updateSemesterConfig,
+    markAttendance,
+    markDayAll,
+    quickAdjustSubjectAttendance,
+    deleteAttendanceRecord,
+    clearAttendanceRecords,
+    resetAttendanceToSample,
     refreshStore: loadData
   };
 }

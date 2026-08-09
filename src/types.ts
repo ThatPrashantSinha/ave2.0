@@ -45,6 +45,67 @@ export interface Birthday {
 
 export type ClassType = 'Lecture' | 'Lab' | 'Tutorial' | 'Seminar' | 'Workshop' | 'Other';
 
+export type AttendanceStatus = 'present' | 'absent' | 'cancelled';
+
+export interface AttendanceRecord {
+  id: string; // e.g. "2026-08-09_tt-1" or generated id
+  date: string; // YYYY-MM-DD
+  subject: string;
+  timeTableEntryId?: string;
+  code?: string;
+  component?: string;
+  status: AttendanceStatus;
+  note?: string;
+  timestamp?: number;
+}
+
+export interface SubjectManualAttendance {
+  subject: string;
+  extraPresent: number;
+  extraAbsent: number;
+}
+
+export interface SemesterConfig {
+  startDate: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD
+  minAttendancePercent: number; // default 75
+  name?: string; // e.g. "Autumn Semester 2026"
+  holidays?: string[]; // YYYY-MM-DD dates to exclude
+}
+
+export interface SubjectAttendanceStats {
+  subject: string;
+  code?: string;
+  component?: string;
+  color: string;
+  venue?: string;
+  instructor?: string;
+  scheduledWeeklyCount: number;
+  present: number;
+  absent: number;
+  cancelled: number;
+  totalConducted: number; // present + absent
+  percentage: number; // (present / totalConducted) * 100
+  status: 'safe' | 'warning' | 'danger' | 'untracked';
+  safeBunks: number; // How many classes can be missed while staying >= min%
+  classesNeeded: number; // How many consecutive classes needed to reach min%
+}
+
+export interface TotalAttendanceStats {
+  present: number;
+  absent: number;
+  cancelled: number;
+  totalConducted: number;
+  percentage: number;
+  minPercent: number;
+  isEligible: boolean;
+  safeBunks: number;
+  classesNeeded: number;
+  totalSubjects: number;
+  daysCompleted: number;
+  weeksCompleted: number;
+}
+
 export interface TimeTableEntry {
   id: string;
   subject: string;

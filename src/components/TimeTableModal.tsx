@@ -1,5 +1,18 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { TimeTableEntry, ClassType } from '../types';
+import { format } from 'date-fns';
+import { 
+  TimeTableEntry, 
+  ClassType, 
+  SemesterConfig, 
+  AttendanceRecord, 
+  SubjectManualAttendance, 
+  AttendanceStatus 
+} from '../types';
+import { AttendanceTrackerView } from './AttendanceTrackerView';
+import { 
+  calculateAttendanceStats, 
+  DEFAULT_SEMESTER_CONFIG 
+} from '../lib/attendanceUtils';
 import { 
   GraduationCap, 
   X, 
@@ -30,7 +43,10 @@ import {
   Award,
   Layers,
   Hash,
-  Compass
+  Compass,
+  TrendingUp,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { cn, toIST } from '../lib/utils';
 import { 
@@ -38,7 +54,7 @@ import {
   downloadTimetableTemplate, 
   exportTimetableToExcel, 
   ParseResult, 
-  DAY_NAMES,
+  DAY_NAMES, 
   DAY_SHORTS 
 } from '../lib/excelTimeTable';
 
@@ -78,6 +94,27 @@ interface TimeTableModalProps {
   deleteEntry: (id: string) => void;
   resetToSample: () => void;
   importEntries?: (newEntries: TimeTableEntry[], replace: boolean) => void;
+  
+  // Attendance System Props
+  semesterConfig?: SemesterConfig;
+  attendanceRecords?: AttendanceRecord[];
+  subjectManualAttendance?: Record<string, SubjectManualAttendance>;
+  onUpdateSemesterConfig?: (config: Partial<SemesterConfig>) => void;
+  onMarkAttendance?: (
+    date: string, 
+    subject: string, 
+    status: AttendanceStatus, 
+    timeTableEntryId?: string, 
+    note?: string,
+    code?: string,
+    component?: string
+  ) => void;
+  onMarkDayAll?: (date: string, status: AttendanceStatus) => void;
+  onQuickAdjust?: (subject: string, deltaPresent: number, deltaAbsent: number) => void;
+  onDeleteAttendanceRecord?: (id: string) => void;
+  onResetAttendanceToSample?: () => void;
+  onClearAllAttendance?: () => void;
+  initialTab?: 'schedule' | 'attendance';
 }
 
 export function TimeTableModal({
@@ -89,13 +126,35 @@ export function TimeTableModal({
   deleteEntry,
   resetToSample,
   importEntries,
+  semesterConfig = DEFAULT_SEMESTER_CONFIG,
+  attendanceRecords = [],
+  subjectManualAttendance = {},
+  onUpdateSemesterConfig,
+  onMarkAttendance,
+  onMarkDayAll,
+  onQuickAdjust,
+  onDeleteAttendanceRecord,
+  onResetAttendanceToSample,
+  onClearAllAttendance,
+  initialTab = 'schedule'
 }: TimeTableModalProps) {
+  const [activeMainTab, setActiveMainTab] = useState<'schedule' | 'attendance'>(initialTab);
   const [selectedEntry, setSelectedEntry] = useState<TimeTableEntry | null>(null);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [showWeekend, setShowWeekend] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSubjectFilter, setActiveSubjectFilter] = useState<string | null>(null);
+
+  // Live Attendance Calculations
+  const { subjectStats, totalStats: totalAttendanceStats } = useMemo(() => {
+    return calculateAttendanceStats(
+      entries,
+      attendanceRecords,
+      semesterConfig,
+      subjectManualAttendance
+    );
+  }, [entries, attendanceRecords, semesterConfig, subjectManualAttendance]);
 
   // Excel import states
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -601,8 +660,77 @@ export function TimeTableModal({
           </div>
         )}
 
-        {/* LIVE STATUS BAR: TODAY & NEXT CLASS BANNER */}
-        <div className="bg-paper-dark border-b-2 border-ink px-3 py-2 shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-2 text-xs">
+        {/* TOP PRIMARY TABS: SCHEDULE MATRIX vs ATTENDANCE TRACKER */}
+        <div className="bg-paper-dark border-b-[3px] border-ink px-3 py-1.5 flex items-center justify-between gap-2 flex-wrap shrink-0">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setActiveMainTab('schedule')}
+              className={cn(
+                "px-3 py-1.5 font-mono text-[10px] uppercase font-black border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center gap-1.5 cursor-pointer",
+                activeMainTab === 'schedule'
+                  ? "bg-ink text-paper"
+                  : "bg-paper text-ink hover:bg-stone-100"
+              )}
+            >
+              <Building size={13} className={activeMainTab === 'schedule' ? 'text-taxi' : 'text-subway-red'} />
+              <span>1. TIMETABLE SCHEDULE ({entries.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveMainTab('attendance')}
+              className={cn(
+                "px-3 py-1.5 font-mono text-[10px] uppercase font-black border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center gap-1.5 cursor-pointer",
+                activeMainTab === 'attendance'
+                  ? "bg-taxi text-ink"
+                  : "bg-paper text-ink hover:bg-yellow-50"
+              )}
+            >
+              <GraduationCap size={14} className="text-ink" strokeWidth={2.5} />
+              <span>2. ATTENDANCE TRACKER &amp; STATS</span>
+              <span className={cn(
+                "px-1.5 py-0.2 rounded-3xs text-[8px] font-black border",
+                totalAttendanceStats.percentage >= (semesterConfig?.minAttendancePercent || 75)
+                  ? "bg-emerald-100 text-emerald-950 border-emerald-700"
+                  : "bg-subway-red text-white border-ink animate-pulse"
+              )}>
+                {totalAttendanceStats.percentage}% TILL DATE
+              </span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 font-mono text-[8.5px] font-bold text-ink/75 uppercase">
+            <span>SEM START: <strong className="font-black text-ink">{semesterConfig?.startDate || '2025-01-06'}</strong></span>
+            <span>•</span>
+            <span>CRITERIA: <strong className="font-black text-ink">{semesterConfig?.minAttendancePercent || 75}%</strong></span>
+          </div>
+        </div>
+
+        {/* RENDER ACTIVE TAB: ATTENDANCE TRACKER VIEW */}
+        {activeMainTab === 'attendance' && (
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-paper-dark/30">
+            <AttendanceTrackerView
+              entries={entries}
+              semesterConfig={semesterConfig || DEFAULT_SEMESTER_CONFIG}
+              attendanceRecords={attendanceRecords || []}
+              subjectManualAttendance={subjectManualAttendance || {}}
+              onUpdateSemesterConfig={onUpdateSemesterConfig || (() => {})}
+              onMarkAttendance={onMarkAttendance || (() => {})}
+              onMarkDayAll={onMarkDayAll || (() => {})}
+              onQuickAdjust={onQuickAdjust || (() => {})}
+              onDeleteRecord={onDeleteAttendanceRecord || (() => {})}
+              onResetToSample={onResetAttendanceToSample || (() => {})}
+              onClearAll={onClearAllAttendance || (() => {})}
+            />
+          </div>
+        )}
+
+        {/* RENDER ACTIVE TAB: TIMETABLE SCHEDULE MATRIX */}
+        {activeMainTab === 'schedule' && (
+          <>
+            {/* LIVE STATUS BAR: TODAY & NEXT CLASS BANNER */}
+            <div className="bg-paper-dark border-b-2 border-ink px-3 py-2 shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-2 text-xs">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase font-bold text-ink">
               <CalendarDays size={13} className="text-subway-red" />
@@ -918,6 +1046,8 @@ export function TimeTableModal({
           )}
 
         </div>
+        </>
+      )}
 
         {/* BOTTOM FOOTER TOOLBAR */}
         <div className="bg-paper border-t-[4px] border-ink p-3 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0">
@@ -1305,6 +1435,89 @@ export function TimeTableModal({
                     {selectedEntry.venue}
                   </div>
                 </div>
+
+                {/* ATTENDANCE SUMMARY FOR THIS SUBJECT */}
+                {(() => {
+                  const subStat = subjectStats.find(s => s.subject.trim().toLowerCase() === selectedEntry.subject.trim().toLowerCase());
+                  const todayDateStr = format(toIST(new Date()), 'yyyy-MM-dd');
+                  const todayRec = attendanceRecords.find(r => r.date === todayDateStr && (r.timeTableEntryId === selectedEntry.id || r.subject === selectedEntry.subject));
+
+                  return (
+                    <div className="bg-paper border-2 border-ink p-3 rounded-xs shadow-[2px_2px_0px_#1A1A1B] space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-mono text-[8.5px] font-black uppercase text-ink flex items-center gap-1">
+                          <GraduationCap size={12} className="text-subway-red" />
+                          <span>ATTENDANCE STATUS TILL DATE</span>
+                        </span>
+                        {subStat && (
+                          <span className={cn(
+                            "font-sans font-black text-xs px-1.5 py-0.2 rounded-3xs border",
+                            subStat.percentage >= (semesterConfig?.minAttendancePercent || 75)
+                              ? "bg-emerald-100 text-emerald-950 border-emerald-600"
+                              : "bg-rose-100 text-subway-red border-red-600"
+                          )}>
+                            {subStat.percentage}% ({subStat.present}/{subStat.totalConducted})
+                          </span>
+                        )}
+                      </div>
+
+                      {subStat && (
+                        <div className="space-y-1">
+                          <div className="relative w-full h-2 bg-paper-dark border border-ink/40 overflow-hidden">
+                            <div
+                              className={cn(
+                                "h-full",
+                                subStat.percentage >= (semesterConfig?.minAttendancePercent || 75) ? "bg-emerald-500" : "bg-subway-red"
+                              )}
+                              style={{ width: `${Math.min(100, Math.max(0, subStat.percentage))}%` }}
+                            />
+                          </div>
+                          <div className="font-mono text-[7.5px] font-bold text-ink/70 flex justify-between uppercase">
+                            <span>{subStat.present} Present / {subStat.absent} Absent</span>
+                            {subStat.percentage >= (semesterConfig?.minAttendancePercent || 75) ? (
+                              <span className="text-emerald-700 font-black">Can bunk {subStat.safeBunks} more classes</span>
+                            ) : (
+                              <span className="text-subway-red font-black">Need next {subStat.classesNeeded} classes</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Quick Mark for Today */}
+                      <div className="flex items-center justify-between pt-1.5 border-t border-dashed border-ink/20 gap-2">
+                        <span className="font-mono text-[7.5px] font-black text-ink/60 uppercase">
+                          TODAY'S STATUS:
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onMarkAttendance?.(todayDateStr, selectedEntry.subject, 'present', selectedEntry.id, undefined, selectedEntry.code, selectedEntry.component)}
+                            className={cn(
+                              "px-2 py-0.5 font-mono text-[8px] font-black uppercase border border-ink rounded-3xs cursor-pointer active:translate-y-0.5 transition-colors",
+                              todayRec?.status === 'present'
+                                ? "bg-emerald-500 text-white"
+                                : "bg-emerald-50 text-emerald-950 hover:bg-emerald-100"
+                            )}
+                          >
+                            ✓ PRESENT
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onMarkAttendance?.(todayDateStr, selectedEntry.subject, 'absent', selectedEntry.id, undefined, selectedEntry.code, selectedEntry.component)}
+                            className={cn(
+                              "px-2 py-0.5 font-mono text-[8px] font-black uppercase border border-ink rounded-3xs cursor-pointer active:translate-y-0.5 transition-colors",
+                              todayRec?.status === 'absent'
+                                ? "bg-subway-red text-white"
+                                : "bg-rose-50 text-subway-red hover:bg-rose-100"
+                            )}
+                          >
+                            ✗ ABSENT
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Grid stats: Time & Faculty */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
