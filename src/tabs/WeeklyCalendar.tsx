@@ -44,16 +44,14 @@ import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { SketchPushPin } from '../components/SketchPushPin';
 import { HabitIcon } from '../components/HabitIcon';
 
-// Custom micro-icon/symbol component for present, absent, cancel and not marked
+// Custom micro-icon/symbol component for present, absent, cancel and not marked (icon only, no internal text)
 export function AttendanceStatusSymbol({
   status,
-  size = 'md',
-  showLabel = false,
+  size = 'sm',
   className = ''
 }: {
   status: AttendanceStatus | 'unmarked' | null;
   size?: 'xs' | 'sm' | 'md' | 'lg';
-  showLabel?: boolean;
   className?: string;
 }) {
   if (!status) return null;
@@ -63,72 +61,84 @@ export function AttendanceStatusSymbol({
       return (
         <span
           className={cn(
-            "inline-flex items-center justify-center font-mono font-black uppercase rounded-3xs border transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
+            "inline-flex items-center justify-center font-mono rounded-3xs border transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
             "bg-emerald-600 text-white border-emerald-950",
-            size === 'xs' && "w-3 h-3 text-[6px]",
-            size === 'sm' && (showLabel ? "px-1 py-0.2 text-[6px] gap-0.5" : "w-3.5 h-3.5 text-[7px]"),
-            size === 'md' && (showLabel ? "px-1.5 py-0.5 text-[7px] md:text-[8px] gap-1" : "w-4 h-4 text-[8px]"),
-            size === 'lg' && (showLabel ? "px-2 py-1 text-[10px] gap-1.5" : "w-6 h-6 text-[11px]"),
+            size === 'xs' && "w-3 h-3 min-w-[12px]",
+            size === 'sm' && "w-3.5 h-3.5 min-w-[14px]",
+            size === 'md' && "w-4.5 h-4.5 min-w-[18px]",
+            size === 'lg' && "w-6 h-6 min-w-[24px]",
             className
           )}
-          title="Attendance: PRESENT (✓)"
+          title="Attendance: Present (✓)"
         >
-          <Check size={size === 'xs' ? 7.5 : size === 'sm' ? 8.5 : size === 'md' ? 10 : 13} strokeWidth={3.5} className="shrink-0 text-white" />
-          {showLabel && <span>PRESENT</span>}
+          <Check 
+            size={size === 'xs' ? 7.5 : size === 'sm' ? 9 : size === 'md' ? 11 : 14} 
+            strokeWidth={3.5} 
+            className="shrink-0 text-white" 
+          />
         </span>
       );
     case 'absent':
       return (
         <span
           className={cn(
-            "inline-flex items-center justify-center font-mono font-black uppercase rounded-3xs border transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
+            "inline-flex items-center justify-center font-mono rounded-3xs border transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
             "bg-subway-red text-white border-rose-950",
-            size === 'xs' && "w-3 h-3 text-[6px]",
-            size === 'sm' && (showLabel ? "px-1 py-0.2 text-[6px] gap-0.5" : "w-3.5 h-3.5 text-[7px]"),
-            size === 'md' && (showLabel ? "px-1.5 py-0.5 text-[7px] md:text-[8px] gap-1" : "w-4 h-4 text-[8px]"),
-            size === 'lg' && (showLabel ? "px-2 py-1 text-[10px] gap-1.5" : "w-6 h-6 text-[11px]"),
+            size === 'xs' && "w-3 h-3 min-w-[12px]",
+            size === 'sm' && "w-3.5 h-3.5 min-w-[14px]",
+            size === 'md' && "w-4.5 h-4.5 min-w-[18px]",
+            size === 'lg' && "w-6 h-6 min-w-[24px]",
             className
           )}
-          title="Attendance: ABSENT (✕)"
+          title="Attendance: Absent (✕)"
         >
-          <X size={size === 'xs' ? 7.5 : size === 'sm' ? 8.5 : size === 'md' ? 10 : 13} strokeWidth={3.5} className="shrink-0 text-white" />
-          {showLabel && <span>ABSENT</span>}
+          <X 
+            size={size === 'xs' ? 7.5 : size === 'sm' ? 9 : size === 'md' ? 11 : 14} 
+            strokeWidth={3.5} 
+            className="shrink-0 text-white" 
+          />
         </span>
       );
     case 'cancelled':
       return (
         <span
           className={cn(
-            "inline-flex items-center justify-center font-mono font-black uppercase rounded-3xs border transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
+            "inline-flex items-center justify-center font-mono rounded-3xs border transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
             "bg-stone-500 text-white border-stone-800",
-            size === 'xs' && "w-3 h-3 text-[6px]",
-            size === 'sm' && (showLabel ? "px-1 py-0.2 text-[6px] gap-0.5" : "w-3.5 h-3.5 text-[7px]"),
-            size === 'md' && (showLabel ? "px-1.5 py-0.5 text-[7px] md:text-[8px] gap-1" : "w-4 h-4 text-[8px]"),
-            size === 'lg' && (showLabel ? "px-2 py-1 text-[10px] gap-1.5" : "w-6 h-6 text-[11px]"),
+            size === 'xs' && "w-3 h-3 min-w-[12px]",
+            size === 'sm' && "w-3.5 h-3.5 min-w-[14px]",
+            size === 'md' && "w-4.5 h-4.5 min-w-[18px]",
+            size === 'lg' && "w-6 h-6 min-w-[24px]",
             className
           )}
-          title="Class: CANCELLED (⊘)"
+          title="Class: Cancelled (⊘)"
         >
-          <Ban size={size === 'xs' ? 7 : size === 'sm' ? 8 : size === 'md' ? 9.5 : 12} strokeWidth={3} className="shrink-0 text-white" />
-          {showLabel && <span>CANCELLED</span>}
+          <Ban 
+            size={size === 'xs' ? 7 : size === 'sm' ? 8.5 : size === 'md' ? 10.5 : 13} 
+            strokeWidth={3} 
+            className="shrink-0 text-white" 
+          />
         </span>
       );
     case 'unmarked':
       return (
         <span
           className={cn(
-            "inline-flex items-center justify-center font-mono font-black uppercase rounded-3xs border border-dashed transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
+            "inline-flex items-center justify-center font-mono rounded-3xs border border-dashed transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
             "bg-amber-400 text-amber-950 border-amber-900",
-            size === 'xs' && "w-3 h-3 text-[6px]",
-            size === 'sm' && (showLabel ? "px-1 py-0.2 text-[6px] gap-0.5" : "w-3.5 h-3.5 text-[7px]"),
-            size === 'md' && (showLabel ? "px-1.5 py-0.5 text-[7px] md:text-[8px] gap-1" : "w-4 h-4 text-[8px]"),
-            size === 'lg' && (showLabel ? "px-2 py-1 text-[10px] gap-1.5" : "w-6 h-6 text-[11px]"),
+            size === 'xs' && "w-3 h-3 min-w-[12px]",
+            size === 'sm' && "w-3.5 h-3.5 min-w-[14px]",
+            size === 'md' && "w-4.5 h-4.5 min-w-[18px]",
+            size === 'lg' && "w-6 h-6 min-w-[24px]",
             className
           )}
-          title="Attendance: NOT MARKED (?)"
+          title="Attendance: Not Marked (?)"
         >
-          <HelpCircle size={size === 'xs' ? 7.5 : size === 'sm' ? 8.5 : size === 'md' ? 10 : 13} strokeWidth={3.5} className="shrink-0 text-amber-950" />
-          {showLabel && <span>NOT MARKED</span>}
+          <HelpCircle 
+            size={size === 'xs' ? 7.5 : size === 'sm' ? 9 : size === 'md' ? 11 : 14} 
+            strokeWidth={3.5} 
+            className="shrink-0 text-amber-950" 
+          />
         </span>
       );
     default:
@@ -1883,8 +1893,8 @@ export function WeeklyCalendar({
                                       )}
                                     </div>
 
-                                    {/* Custom Attendance Status Pill for happened / marked classes */}
-                                    <AttendanceStatusSymbol status={attStatus} size="sm" showLabel={true} />
+                                    {/* Custom Attendance Status Icon Symbol for happened / marked classes */}
+                                    <AttendanceStatusSymbol status={attStatus} size="sm" />
                                   </div>
 
                                   {/* Subject Title */}
@@ -3124,7 +3134,12 @@ export function WeeklyCalendar({
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="font-mono text-[10px] font-bold text-ink/75">Status:</span>
-                          <AttendanceStatusSymbol status={currentStatus} size="sm" showLabel={true} />
+                          <div className="flex items-center gap-1.5">
+                            <AttendanceStatusSymbol status={currentStatus} size="sm" />
+                            <span className="font-mono text-[10px] font-black uppercase text-ink">
+                              {currentStatus === 'present' ? 'Present' : currentStatus === 'absent' ? 'Absent' : currentStatus === 'cancelled' ? 'Cancelled' : 'Not Marked Yet'}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
