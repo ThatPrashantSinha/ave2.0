@@ -80,6 +80,10 @@ export default function App() {
             onOpenBirthdays={() => setIsBirthdaysOpen(true)}
             timeTableEntries={timeTableEntries}
             onOpenTimeTable={() => setIsTimeTableOpen(true)}
+            semesterConfig={semesterConfig}
+            attendanceRecords={attendanceRecords}
+            onMarkAttendance={markAttendance}
+            onDeleteAttendanceRecord={deleteAttendanceRecord}
           />
         )}
         {currentTab === 'focus' && <Focus />}

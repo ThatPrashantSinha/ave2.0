@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, getHours, getMinutes, addHours } from 'date-fns';
-import { Task, Birthday, Habit, TimeTableEntry } from '../types';
+import { Task, Birthday, Habit, TimeTableEntry, SemesterConfig, AttendanceRecord, AttendanceStatus } from '../types';
 import { cn, toIST } from '../lib/utils';
 import { 
   Clock, 
@@ -34,12 +34,107 @@ import {
   ExternalLink, 
   Info, 
   Check, 
-  Building 
+  Building,
+  Ban,
+  HelpCircle,
+  AlertCircle 
 } from 'lucide-react';
 import { AnalogClockPicker } from '../components/AnalogClockPicker';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { SketchPushPin } from '../components/SketchPushPin';
 import { HabitIcon } from '../components/HabitIcon';
+
+// Custom micro-icon/symbol component for present, absent, cancel and not marked
+export function AttendanceStatusSymbol({
+  status,
+  size = 'md',
+  showLabel = false,
+  className = ''
+}: {
+  status: AttendanceStatus | 'unmarked' | null;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  showLabel?: boolean;
+  className?: string;
+}) {
+  if (!status) return null;
+
+  switch (status) {
+    case 'present':
+      return (
+        <span
+          className={cn(
+            "inline-flex items-center justify-center font-mono font-black uppercase rounded-3xs border transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
+            "bg-emerald-600 text-white border-emerald-950",
+            size === 'xs' && "w-3 h-3 text-[6px]",
+            size === 'sm' && (showLabel ? "px-1 py-0.2 text-[6px] gap-0.5" : "w-3.5 h-3.5 text-[7px]"),
+            size === 'md' && (showLabel ? "px-1.5 py-0.5 text-[7px] md:text-[8px] gap-1" : "w-4 h-4 text-[8px]"),
+            size === 'lg' && (showLabel ? "px-2 py-1 text-[10px] gap-1.5" : "w-6 h-6 text-[11px]"),
+            className
+          )}
+          title="Attendance: PRESENT (✓)"
+        >
+          <Check size={size === 'xs' ? 7.5 : size === 'sm' ? 8.5 : size === 'md' ? 10 : 13} strokeWidth={3.5} className="shrink-0 text-white" />
+          {showLabel && <span>PRESENT</span>}
+        </span>
+      );
+    case 'absent':
+      return (
+        <span
+          className={cn(
+            "inline-flex items-center justify-center font-mono font-black uppercase rounded-3xs border transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
+            "bg-subway-red text-white border-rose-950",
+            size === 'xs' && "w-3 h-3 text-[6px]",
+            size === 'sm' && (showLabel ? "px-1 py-0.2 text-[6px] gap-0.5" : "w-3.5 h-3.5 text-[7px]"),
+            size === 'md' && (showLabel ? "px-1.5 py-0.5 text-[7px] md:text-[8px] gap-1" : "w-4 h-4 text-[8px]"),
+            size === 'lg' && (showLabel ? "px-2 py-1 text-[10px] gap-1.5" : "w-6 h-6 text-[11px]"),
+            className
+          )}
+          title="Attendance: ABSENT (✕)"
+        >
+          <X size={size === 'xs' ? 7.5 : size === 'sm' ? 8.5 : size === 'md' ? 10 : 13} strokeWidth={3.5} className="shrink-0 text-white" />
+          {showLabel && <span>ABSENT</span>}
+        </span>
+      );
+    case 'cancelled':
+      return (
+        <span
+          className={cn(
+            "inline-flex items-center justify-center font-mono font-black uppercase rounded-3xs border transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
+            "bg-stone-500 text-white border-stone-800",
+            size === 'xs' && "w-3 h-3 text-[6px]",
+            size === 'sm' && (showLabel ? "px-1 py-0.2 text-[6px] gap-0.5" : "w-3.5 h-3.5 text-[7px]"),
+            size === 'md' && (showLabel ? "px-1.5 py-0.5 text-[7px] md:text-[8px] gap-1" : "w-4 h-4 text-[8px]"),
+            size === 'lg' && (showLabel ? "px-2 py-1 text-[10px] gap-1.5" : "w-6 h-6 text-[11px]"),
+            className
+          )}
+          title="Class: CANCELLED (⊘)"
+        >
+          <Ban size={size === 'xs' ? 7 : size === 'sm' ? 8 : size === 'md' ? 9.5 : 12} strokeWidth={3} className="shrink-0 text-white" />
+          {showLabel && <span>CANCELLED</span>}
+        </span>
+      );
+    case 'unmarked':
+      return (
+        <span
+          className={cn(
+            "inline-flex items-center justify-center font-mono font-black uppercase rounded-3xs border border-dashed transition-all shrink-0 select-none shadow-[1px_1px_0px_#1A1A1B]",
+            "bg-amber-400 text-amber-950 border-amber-900",
+            size === 'xs' && "w-3 h-3 text-[6px]",
+            size === 'sm' && (showLabel ? "px-1 py-0.2 text-[6px] gap-0.5" : "w-3.5 h-3.5 text-[7px]"),
+            size === 'md' && (showLabel ? "px-1.5 py-0.5 text-[7px] md:text-[8px] gap-1" : "w-4 h-4 text-[8px]"),
+            size === 'lg' && (showLabel ? "px-2 py-1 text-[10px] gap-1.5" : "w-6 h-6 text-[11px]"),
+            className
+          )}
+          title="Attendance: NOT MARKED (?)"
+        >
+          <HelpCircle size={size === 'xs' ? 7.5 : size === 'sm' ? 8.5 : size === 'md' ? 10 : 13} strokeWidth={3.5} className="shrink-0 text-amber-950" />
+          {showLabel && <span>NOT MARKED</span>}
+        </span>
+      );
+    default:
+      return null;
+  }
+}
 
 // Helper to format 24hr string to 12hr IST time display (e.g. "09:00 AM", "01:30 PM")
 export function format12Hour(time24: string): string {
@@ -105,6 +200,10 @@ interface WeeklyCalendarProps {
   onOpenBirthdays: () => void;
   timeTableEntries?: TimeTableEntry[];
   onOpenTimeTable?: () => void;
+  semesterConfig?: SemesterConfig;
+  attendanceRecords?: AttendanceRecord[];
+  onMarkAttendance?: (date: string, subject: string, status: AttendanceStatus, timeTableEntryId?: string, note?: string, code?: string, component?: string) => void;
+  onDeleteAttendanceRecord?: (id: string) => void;
 }
 
 interface EventLayout {
@@ -266,7 +365,11 @@ export function WeeklyCalendar({
   birthdays, 
   onOpenBirthdays,
   timeTableEntries = [],
-  onOpenTimeTable
+  onOpenTimeTable,
+  semesterConfig,
+  attendanceRecords = [],
+  onMarkAttendance,
+  onDeleteAttendanceRecord
 }: WeeklyCalendarProps) {
   const [currentDate, setCurrentDate] = useState(toIST(new Date()));
   const [activePopoverPinId, setActivePopoverPinId] = useState<string | null>(null);
@@ -291,6 +394,7 @@ export function WeeklyCalendar({
   }, [isTimeTableVisible]);
 
   const [selectedSubject, setSelectedSubject] = useState<TimeTableEntry | null>(null);
+  const [selectedSlotDetails, setSelectedSlotDetails] = useState<{ entry: TimeTableEntry; date: Date; dateStr: string } | null>(null);
 
   // Press-and-Hold to toggle timetable visibility
   const [holdProgress, setHoldProgress] = useState(0);
@@ -587,6 +691,13 @@ export function WeeklyCalendar({
       });
 
       const hasTimeTableThisHour = isTimeTableVisible && weekDays.some(day => {
+        const dayStr = format(day, 'yyyy-MM-dd');
+        const semStartStr = semesterConfig?.startDate || '';
+        const semEndStr = semesterConfig?.endDate || '';
+        const isHoliday = (semesterConfig?.holidays || []).includes(dayStr);
+        const isWithinSemester = (!semStartStr || dayStr >= semStartStr) && (!semEndStr || dayStr <= semEndStr) && !isHoliday;
+        if (!isWithinSemester) return false;
+
         const dNum = day.getDay();
         return timeTableEntries.some(e => {
           if (e.dayOfWeek !== dNum) return false;
@@ -613,7 +724,7 @@ export function WeeklyCalendar({
       hourTops: tops,
       totalGridHeight: currentTop,
     };
-  }, [expandedTasksForWeek, weekDays, isMinimizedView, isTimeTableVisible, timeTableEntries]);
+  }, [expandedTasksForWeek, weekDays, isMinimizedView, isTimeTableVisible, timeTableEntries, semesterConfig]);
 
   const getNowYPosition = () => {
     const hh = now.getHours();
@@ -953,6 +1064,32 @@ export function WeeklyCalendar({
                   {isTimeTableVisible ? 'ON' : 'OFF'}
                 </span>
               </button>
+
+              {/* Attendance Mini Legend */}
+              {isTimeTableVisible && (
+                <div className="hidden lg:flex items-center gap-1 px-1.5 py-1 bg-paper border-2 border-ink shadow-[1.5px_1.5px_0px_#1A1A1B] text-[7.5px] font-mono font-black select-none">
+                  <span className="text-ink/60 mr-0.5">ATTENDANCE:</span>
+                  <div className="flex items-center gap-0.5" title="Present: Class attended">
+                    <AttendanceStatusSymbol status="present" size="xs" />
+                    <span className="text-emerald-950 font-bold">PRESENT</span>
+                  </div>
+                  <span className="text-ink/30">•</span>
+                  <div className="flex items-center gap-0.5" title="Absent: Class missed">
+                    <AttendanceStatusSymbol status="absent" size="xs" />
+                    <span className="text-subway-red font-bold">ABSENT</span>
+                  </div>
+                  <span className="text-ink/30">•</span>
+                  <div className="flex items-center gap-0.5" title="Cancelled: Class didn't occur">
+                    <AttendanceStatusSymbol status="cancelled" size="xs" />
+                    <span className="text-stone-700 font-bold">CANCEL</span>
+                  </div>
+                  <span className="text-ink/30">•</span>
+                  <div className="flex items-center gap-0.5" title="Not Marked: Occurrence happened, pending entry">
+                    <AttendanceStatusSymbol status="unmarked" size="xs" />
+                    <span className="text-amber-950 font-bold">NOT MARKED</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <button 
@@ -1599,8 +1736,22 @@ export function WeeklyCalendar({
 
                       {/* College Time Table Schedule Subject Slots */}
                       {isTimeTableVisible && (() => {
+                        const dayStr = format(day, 'yyyy-MM-dd');
+                        const semStartStr = semesterConfig?.startDate || '';
+                        const semEndStr = semesterConfig?.endDate || '';
+                        const isHoliday = (semesterConfig?.holidays || []).includes(dayStr);
+                        const isWithinSemester = (!semStartStr || dayStr >= semStartStr) && (!semEndStr || dayStr <= semEndStr) && !isHoliday;
+
+                        // Only show timetable from the semester start date onwards
+                        if (!isWithinSemester) return null;
+
                         const dayOfWeekNum = day.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
                         const dayEntries = (timeTableEntries || []).filter(e => e.dayOfWeek === dayOfWeekNum);
+
+                        const todayStr = format(now, 'yyyy-MM-dd');
+                        const isPastDate = dayStr < todayStr;
+                        const isToday = dayStr === todayStr;
+                        const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
                         return dayEntries.map(entry => {
                           const [shStr, smStr] = entry.startTime.split(':');
@@ -1626,20 +1777,28 @@ export function WeeklyCalendar({
                           const compShort = compType.substring(0, 3).toUpperCase();
                           const displayedVenue = getVenueAfterSecondDash(entry.venue);
 
-                          const nowDay = now.getDay();
-                          const isToday = dayOfWeekNum === nowDay;
-                          const nowMinutes = now.getHours() * 60 + now.getMinutes();
                           const startMinutes = sh * 60 + sm;
                           const endMinutes = eh * 60 + em;
                           const isActiveNow = isToday && nowMinutes >= startMinutes && nowMinutes <= endMinutes;
+                          const isClassStartedOrPast = isPastDate || (isToday && nowMinutes >= startMinutes);
+
+                          // Find attendance record for this occurrence on this specific date
+                          const record = (attendanceRecords || []).find(r => 
+                            r.date === dayStr && 
+                            (r.timeTableEntryId === entry.id || r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase())
+                          );
+
+                          // Attendance status for past or marked class
+                          const attStatus = record?.status ? record.status : (isClassStartedOrPast ? 'unmarked' : null);
 
                           return (
                             <div
-                              key={`cal-tt-${entry.id}-${day.toISOString()}`}
+                              key={`cal-tt-${entry.id}-${dayStr}`}
                               onClick={(e) => {
                                 if (isMinimizedView) return;
                                 e.stopPropagation();
                                 setSelectedSubject(entry);
+                                setSelectedSlotDetails({ entry, date: day, dateStr: dayStr });
                               }}
                               style={{
                                 top: `${top}px`,
@@ -1659,7 +1818,7 @@ export function WeeklyCalendar({
                                     ),
                                 isActiveNow && "ring-2 ring-emerald-600 bg-emerald-50/90 animate-doing-pulse"
                               )}
-                              title={`${entry.subject} (${format12Hour(entry.startTime)} – ${format12Hour(entry.endTime)} IST) @ ${entry.venue || 'Classroom'} — Click for details`}
+                              title={`${entry.subject} (${format12Hour(entry.startTime)} – ${format12Hour(entry.endTime)} IST) @ ${entry.venue || 'Classroom'}${attStatus ? ` • Attendance: ${attStatus.toUpperCase()}` : ''}`}
                             >
                               {/* Subtle background academic graduation cap watermark */}
                               <div className="absolute right-1 bottom-0.5 opacity-[0.08] group-hover/tt:opacity-20 pointer-events-none transition-opacity">
@@ -1667,24 +1826,29 @@ export function WeeklyCalendar({
                               </div>
 
                               {isMinimizedView ? (
-                                <div className="flex items-center h-full pl-0.5 pr-0.5 text-[6.5px] font-black text-ink overflow-hidden select-none leading-none">
-                                  <span className="truncate w-full block">
+                                <div className="flex items-center justify-between h-full pl-0.5 pr-0.5 text-[6.5px] font-black text-ink overflow-hidden select-none leading-none">
+                                  <span className="truncate flex-1 block">
                                     <span className="font-mono font-bold opacity-60 mr-0.5">{compShort}:</span>
                                     {entry.subject}
                                   </span>
+                                  <AttendanceStatusSymbol status={attStatus} size="xs" />
                                 </div>
                               ) : isCompact ? (
                                 <div className="flex flex-col justify-between h-full pl-0.5 pr-0.5 relative z-10">
-                                  <div className="flex items-center gap-1 min-w-0">
-                                    <span 
-                                      className="font-mono text-[6px] font-black uppercase px-0.5 py-0.2 rounded-3xs border text-white shrink-0 leading-none shadow-[0.5px_0.5px_0px_#1A1A1B]"
-                                      style={{ backgroundColor: entry.color || '#2563EB', borderColor: '#1A1A1B' }}
-                                    >
-                                      {compShort}
-                                    </span>
-                                    <span className="font-sans font-black text-[7.5px] md:text-[8px] text-ink truncate leading-tight">
-                                      {entry.subject}
-                                    </span>
+                                  <div className="flex items-center justify-between gap-1 min-w-0">
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      <span 
+                                        className="font-mono text-[6px] font-black uppercase px-0.5 py-0.2 rounded-3xs border text-white shrink-0 leading-none shadow-[0.5px_0.5px_0px_#1A1A1B]"
+                                        style={{ backgroundColor: entry.color || '#2563EB', borderColor: '#1A1A1B' }}
+                                      >
+                                        {compShort}
+                                      </span>
+                                      <span className="font-sans font-black text-[7.5px] md:text-[8px] text-ink truncate leading-tight">
+                                        {entry.subject}
+                                      </span>
+                                    </div>
+                                    {/* Minimal custom icon symbol in compact mode */}
+                                    <AttendanceStatusSymbol status={attStatus} size="xs" />
                                   </div>
                                   {displayedVenue && (
                                     <div 
@@ -1700,7 +1864,7 @@ export function WeeklyCalendar({
                                 </div>
                               ) : (
                                 <div className="flex flex-col justify-between h-full pl-0.5 relative z-10">
-                                  {/* Top Row: Component Pill + Course Code / Active Badge (Time removed) */}
+                                  {/* Top Row: Component Pill + Course Code + Custom Attendance Status Badge */}
                                   <div className="flex items-center justify-between gap-1">
                                     <div className="flex items-center gap-1 min-w-0">
                                       <span 
@@ -1718,6 +1882,9 @@ export function WeeklyCalendar({
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping shrink-0" title="Class active in session now" />
                                       )}
                                     </div>
+
+                                    {/* Custom Attendance Status Pill for happened / marked classes */}
+                                    <AttendanceStatusSymbol status={attStatus} size="sm" showLabel={true} />
                                   </div>
 
                                   {/* Subject Title */}
@@ -2796,7 +2963,10 @@ export function WeeklyCalendar({
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-4 select-none animate-in fade-in duration-150">
           <div 
             className="absolute inset-0 bg-ink/75 backdrop-blur-sm"
-            onClick={() => setSelectedSubject(null)}
+            onClick={() => {
+              setSelectedSubject(null);
+              setSelectedSlotDetails(null);
+            }}
           />
           
           <div className="relative w-full max-w-lg bg-[#FFFEFA] border-[6px] border-ink shadow-[10px_10px_0px_#1A1A1B] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 text-ink max-h-[90vh]">
@@ -2834,7 +3004,10 @@ export function WeeklyCalendar({
 
               <button
                 type="button"
-                onClick={() => setSelectedSubject(null)}
+                onClick={() => {
+                  setSelectedSubject(null);
+                  setSelectedSlotDetails(null);
+                }}
                 className="w-8 h-8 rounded-sm bg-white/20 hover:bg-white hover:text-ink text-white border-2 border-white/60 flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-[2px_2px_0px_rgba(0,0,0,0.2)]"
                 title="Close subject dossier"
               >
@@ -2913,6 +3086,154 @@ export function WeeklyCalendar({
                         </span>
                       )}
                     </div>
+                  </div>
+                );
+              })()}
+
+              {/* ATTENDANCE CONTROLLER FOR THIS CLASS OCCURRENCE */}
+              {(() => {
+                const targetDayDate = selectedSlotDetails?.date || weekDays.find(d => d.getDay() === selectedSubject.dayOfWeek) || currentDate;
+                const slotDateStr = selectedSlotDetails?.dateStr || format(targetDayDate, 'yyyy-MM-dd');
+                const formattedClassDate = format(targetDayDate, 'EEEE, MMMM d, yyyy');
+
+                // Find record for this specific occurrence
+                const slotRecord = (attendanceRecords || []).find(r => 
+                  r.date === slotDateStr && 
+                  (r.timeTableEntryId === selectedSubject.id || r.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase())
+                );
+
+                const currentStatus: AttendanceStatus | 'unmarked' = slotRecord ? slotRecord.status : 'unmarked';
+
+                // Subject overall statistics
+                const subjectRecords = (attendanceRecords || []).filter(r => 
+                  r.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase()
+                );
+                const totalPresent = subjectRecords.filter(r => r.status === 'present').length;
+                const totalAbsent = subjectRecords.filter(r => r.status === 'absent').length;
+                const totalConducted = totalPresent + totalAbsent;
+                const percent = totalConducted > 0 ? Math.round((totalPresent / totalConducted) * 100) : 0;
+                const minPct = semesterConfig?.minAttendancePercent || 75;
+
+                return (
+                  <div className="border-[3px] border-ink p-3.5 bg-paper shadow-[3px_3px_0px_#1A1A1B] flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap border-b border-ink/15 pb-2">
+                      <div>
+                        <div className="font-mono text-[9px] font-black uppercase tracking-widest text-ink/60 flex items-center gap-1.5">
+                          <Activity size={12} className="text-subway-red" />
+                          <span>ATTENDANCE • {formattedClassDate}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="font-mono text-[10px] font-bold text-ink/75">Status:</span>
+                          <AttendanceStatusSymbol status={currentStatus} size="sm" showLabel={true} />
+                        </div>
+                      </div>
+
+                      {/* Overall Percentage Badge if classes conducted */}
+                      {totalConducted > 0 && (
+                        <div className={cn(
+                          "font-mono text-[9px] font-black px-2 py-0.5 border rounded-3xs shadow-[1px_1px_0px_#1A1A1B] flex items-center gap-1",
+                          percent >= minPct 
+                            ? "bg-emerald-100 text-emerald-950 border-emerald-600" 
+                            : "bg-rose-100 text-subway-red border-subway-red"
+                        )}>
+                          <span>OVERALL: {percent}%</span>
+                          <span className="text-[8px] opacity-75">({totalPresent}/{totalConducted})</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quick Attendance Action Buttons */}
+                    {onMarkAttendance && (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {/* Present Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onMarkAttendance(
+                              slotDateStr,
+                              selectedSubject.subject,
+                              'present',
+                              selectedSubject.id,
+                              undefined,
+                              selectedSubject.code,
+                              selectedSubject.component
+                            );
+                          }}
+                          className={cn(
+                            "py-2 px-1 border-[2.5px] border-ink font-mono text-[10px] font-black uppercase rounded-3xs shadow-[2px_2px_0px_#1A1A1B] active:shadow-none active:translate-y-[1.5px] transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer",
+                            currentStatus === 'present' 
+                              ? "bg-emerald-600 text-white ring-2 ring-emerald-700 font-black shadow-none translate-y-[1px]" 
+                              : "bg-emerald-50 text-emerald-950 hover:bg-emerald-100"
+                          )}
+                        >
+                          <Check size={13} strokeWidth={3.5} />
+                          <span>PRESENT</span>
+                        </button>
+
+                        {/* Absent Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onMarkAttendance(
+                              slotDateStr,
+                              selectedSubject.subject,
+                              'absent',
+                              selectedSubject.id,
+                              undefined,
+                              selectedSubject.code,
+                              selectedSubject.component
+                            );
+                          }}
+                          className={cn(
+                            "py-2 px-1 border-[2.5px] border-ink font-mono text-[10px] font-black uppercase rounded-3xs shadow-[2px_2px_0px_#1A1A1B] active:shadow-none active:translate-y-[1.5px] transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer",
+                            currentStatus === 'absent' 
+                              ? "bg-subway-red text-white ring-2 ring-rose-900 font-black shadow-none translate-y-[1px]" 
+                              : "bg-rose-50 text-subway-red hover:bg-rose-100"
+                          )}
+                        >
+                          <X size={13} strokeWidth={3.5} />
+                          <span>ABSENT</span>
+                        </button>
+
+                        {/* Cancelled Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onMarkAttendance(
+                              slotDateStr,
+                              selectedSubject.subject,
+                              'cancelled',
+                              selectedSubject.id,
+                              undefined,
+                              selectedSubject.code,
+                              selectedSubject.component
+                            );
+                          }}
+                          className={cn(
+                            "py-2 px-1 border-[2.5px] border-ink font-mono text-[10px] font-black uppercase rounded-3xs shadow-[2px_2px_0px_#1A1A1B] active:shadow-none active:translate-y-[1.5px] transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer",
+                            currentStatus === 'cancelled' 
+                              ? "bg-stone-600 text-white ring-2 ring-stone-800 font-black shadow-none translate-y-[1px]" 
+                              : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                          )}
+                        >
+                          <Ban size={13} strokeWidth={3} />
+                          <span>CANCELLED</span>
+                        </button>
+
+                        {/* Clear / Unmark button if marked */}
+                        {slotRecord && onDeleteAttendanceRecord && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteAttendanceRecord(slotRecord.id)}
+                            className="py-2 px-1 bg-paper text-ink hover:bg-stone-100 border-[2.5px] border-ink font-mono text-[10px] font-bold uppercase rounded-3xs shadow-[2px_2px_0px_#1A1A1B] active:shadow-none active:translate-y-[1.5px] transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer col-span-3 sm:col-span-1"
+                            title="Reset attendance for this date"
+                          >
+                            <Trash2 size={12} />
+                            <span>CLEAR</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -3040,7 +3361,10 @@ export function WeeklyCalendar({
 
               <button
                 type="button"
-                onClick={() => setSelectedSubject(null)}
+                onClick={() => {
+                  setSelectedSubject(null);
+                  setSelectedSlotDetails(null);
+                }}
                 className="px-4 py-2 bg-paper text-ink font-mono text-[10px] font-black uppercase border-[3px] border-ink shadow-[2.5px_2.5px_0px_#1A1A1B] active:shadow-none active:translate-y-[2px] hover:bg-paper-dark transition-all cursor-pointer ml-auto"
               >
                 DISMISS

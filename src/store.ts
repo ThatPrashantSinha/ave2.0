@@ -213,10 +213,9 @@ export function useStore() {
       if (storedAtt) {
         setAttendanceRecords(JSON.parse(storedAtt));
       } else {
-        // Generate realistic initial attendance based on timetable and semester start date
-        const initialRecords = generateSampleAttendanceRecords(loadedTT, loadedConfig.startDate);
-        setAttendanceRecords(initialRecords);
-        localStorage.setItem('daily_docket_attendance_records', JSON.stringify(initialRecords));
+        // User requested clean attendance without preset sample logs
+        setAttendanceRecords([]);
+        localStorage.setItem('daily_docket_attendance_records', JSON.stringify([]));
       }
     } catch (e) {
       console.error('Failed to parse attendance records from localStorage:', e);
