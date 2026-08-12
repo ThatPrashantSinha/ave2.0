@@ -21,6 +21,7 @@ export const DEFAULT_SEMESTER_CONFIG: SemesterConfig = {
 
 /**
  * Calculates complete attendance statistics for each subject and total till date.
+ * Strictly synchronized from actual calendar attendance records.
  */
 export function calculateAttendanceStats(
   entries: TimeTableEntry[],
@@ -67,7 +68,7 @@ export function calculateAttendanceStats(
   });
 
   // Also include any subjects present in records that may not currently have timetable slots
-  records.forEach(rec => {
+  (records || []).forEach(rec => {
     const key = rec.subject.trim();
     if (!subjectsMap.has(key)) {
       subjectsMap.set(key, {
@@ -86,30 +87,30 @@ export function calculateAttendanceStats(
   let totalAbsent = 0;
   let totalCancelled = 0;
 
-  // All recorded attendance marks from semester start date onwards
-  const startISO = semesterConfig.startDate;
-
-  const validRecords = records.filter(r => {
-    if (startISO && r.date < startISO) return false;
-    return true;
-  });
+  // All attendance records recorded from the calendar
+  const validRecords = records || [];
 
   subjectsMap.forEach((info, subjectKey) => {
+    // Match records strictly to this subject by exact subject name, code, or timetable entry ID
     const subjectRecords = validRecords.filter(r => 
       r.subject.trim().toLowerCase() === subjectKey.trim().toLowerCase() ||
-      (r.code && info.code && r.code.trim().toLowerCase() === info.code.trim().toLowerCase())
+      (r.code && info.code && r.code.trim().toLowerCase() === info.code.trim().toLowerCase()) ||
+      (r.timeTableEntryId && entries.some(e => e.id === r.timeTableEntryId && e.subject.trim().toLowerCase() === subjectKey.trim().toLowerCase()))
     );
     
-    let present = subjectRecords.filter(r => r.status === 'present').length;
-    let absent = subjectRecords.filter(r => r.status === 'absent').length;
-    let cancelled = subjectRecords.filter(r => r.status === 'cancelled').length;
+    // Deduplicate records for the same date + entry if any
+    const seenMap = new Map<string, AttendanceRecord>();
+    subjectRecords.forEach(r => {
+      const recKey = `${r.date}_${r.timeTableEntryId || r.subject}`;
+      if (!seenMap.has(recKey)) {
+        seenMap.set(recKey, r);
+      }
+    });
+    const uniqueSubjectRecords = Array.from(seenMap.values());
 
-    // Apply manual adjustment extras if any
-    const manual = manualAdjustments[subjectKey];
-    if (manual) {
-      present += Math.max(0, manual.extraPresent || 0);
-      absent += Math.max(0, manual.extraAbsent || 0);
-    }
+    const present = uniqueSubjectRecords.filter(r => r.status === 'present').length;
+    const absent = uniqueSubjectRecords.filter(r => r.status === 'absent').length;
+    const cancelled = uniqueSubjectRecords.filter(r => r.status === 'cancelled').length;
 
     const totalConducted = present + absent;
     let percentage = totalConducted > 0 ? (present / totalConducted) * 100 : 100;

@@ -9,6 +9,7 @@ import {
   AttendanceStatus 
 } from '../types';
 import { AttendanceTrackerView } from './AttendanceTrackerView';
+import { AttendanceStatusSymbol } from './AttendanceStatusSymbol';
 import { 
   calculateAttendanceStats, 
   DEFAULT_SEMESTER_CONFIG 
@@ -1483,36 +1484,36 @@ export function TimeTableModal({
                         </div>
                       )}
 
-                      {/* Quick Mark for Today */}
+                      {/* Synced Today's Status */}
                       <div className="flex items-center justify-between pt-1.5 border-t border-dashed border-ink/20 gap-2">
                         <span className="font-mono text-[7.5px] font-black text-ink/60 uppercase">
-                          TODAY'S STATUS:
+                          CALENDAR STATUS TODAY ({todayDateStr}):
                         </span>
                         <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => onMarkAttendance?.(todayDateStr, selectedEntry.subject, 'present', selectedEntry.id, undefined, selectedEntry.code, selectedEntry.component)}
-                            className={cn(
-                              "px-2 py-0.5 font-mono text-[8px] font-black uppercase border border-ink rounded-3xs cursor-pointer active:translate-y-0.5 transition-colors",
-                              todayRec?.status === 'present'
-                                ? "bg-emerald-500 text-white"
-                                : "bg-emerald-50 text-emerald-950 hover:bg-emerald-100"
-                            )}
-                          >
-                            ✓ PRESENT
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onMarkAttendance?.(todayDateStr, selectedEntry.subject, 'absent', selectedEntry.id, undefined, selectedEntry.code, selectedEntry.component)}
-                            className={cn(
-                              "px-2 py-0.5 font-mono text-[8px] font-black uppercase border border-ink rounded-3xs cursor-pointer active:translate-y-0.5 transition-colors",
-                              todayRec?.status === 'absent'
-                                ? "bg-subway-red text-white"
-                                : "bg-rose-50 text-subway-red hover:bg-rose-100"
-                            )}
-                          >
-                            ✗ ABSENT
-                          </button>
+                          {todayRec?.status === 'present' && (
+                            <span className="px-2 py-0.5 font-mono text-[8px] font-black uppercase bg-emerald-100 text-emerald-950 border border-emerald-700 rounded-3xs flex items-center gap-1">
+                              <AttendanceStatusSymbol status="present" size="xs" />
+                              <span>PRESENT</span>
+                            </span>
+                          )}
+                          {todayRec?.status === 'absent' && (
+                            <span className="px-2 py-0.5 font-mono text-[8px] font-black uppercase bg-rose-100 text-subway-red border border-rose-700 rounded-3xs flex items-center gap-1">
+                              <AttendanceStatusSymbol status="absent" size="xs" />
+                              <span>ABSENT</span>
+                            </span>
+                          )}
+                          {todayRec?.status === 'cancelled' && (
+                            <span className="px-2 py-0.5 font-mono text-[8px] font-black uppercase bg-stone-200 text-stone-800 border border-stone-600 rounded-3xs flex items-center gap-1">
+                              <AttendanceStatusSymbol status="cancelled" size="xs" />
+                              <span>CANCELLED</span>
+                            </span>
+                          )}
+                          {(!todayRec || !todayRec.status) && (
+                            <span className="px-2 py-0.5 font-mono text-[8px] font-black uppercase bg-amber-50 text-amber-950 border border-amber-600 rounded-3xs flex items-center gap-1">
+                              <AttendanceStatusSymbol status="unmarked" size="xs" />
+                              <span>NOT LOGGED</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

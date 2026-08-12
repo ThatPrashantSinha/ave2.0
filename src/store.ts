@@ -312,7 +312,8 @@ export function useStore() {
       const existingIdx = prev.findIndex(r => 
         r.date === date && (
           (timeTableEntryId && r.timeTableEntryId === timeTableEntryId) ||
-          (!timeTableEntryId && r.subject.trim().toLowerCase() === subject.trim().toLowerCase())
+          (r.subject.trim().toLowerCase() === subject.trim().toLowerCase() && (!component || !r.component || r.component.toLowerCase() === component.toLowerCase())) ||
+          (r.subject.trim().toLowerCase() === subject.trim().toLowerCase())
         )
       );
 
@@ -322,6 +323,9 @@ export function useStore() {
         updated[existingIdx] = {
           ...updated[existingIdx],
           status,
+          timeTableEntryId: timeTableEntryId || updated[existingIdx].timeTableEntryId,
+          code: code || updated[existingIdx].code,
+          component: component || updated[existingIdx].component,
           note: note !== undefined ? note : updated[existingIdx].note,
           timestamp: Date.now()
         };

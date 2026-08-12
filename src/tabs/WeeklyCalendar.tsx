@@ -44,6 +44,7 @@ import { getOccurrencesForDateRange } from '../lib/recurrence';
 import { SketchPushPin } from '../components/SketchPushPin';
 import { HabitIcon } from '../components/HabitIcon';
 import { AttendanceStatusSymbol } from '../components/AttendanceStatusSymbol';
+import { calculateAttendanceStats } from '../lib/attendanceUtils';
 
 // Helper to format 24hr string to 12hr IST time display (e.g. "09:00 AM", "01:30 PM")
 export function format12Hour(time24: string): string {
@@ -1694,7 +1695,11 @@ export function WeeklyCalendar({
                           // Find attendance record for this occurrence on this specific date
                           const record = (attendanceRecords || []).find(r => 
                             r.date === dayStr && 
-                            (r.timeTableEntryId === entry.id || r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase())
+                            (
+                              (r.timeTableEntryId && r.timeTableEntryId === entry.id) ||
+                              (r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase() && (!r.component || !entry.component || r.component.toLowerCase() === (entry.component || entry.type || '').toLowerCase())) ||
+                              (r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase())
+                            )
                           );
 
                           // Attendance status for past or marked class
@@ -3008,19 +3013,26 @@ export function WeeklyCalendar({
                 // Find record for this specific occurrence
                 const slotRecord = (attendanceRecords || []).find(r => 
                   r.date === slotDateStr && 
-                  (r.timeTableEntryId === selectedSubject.id || r.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase())
+                  (
+                    (r.timeTableEntryId && r.timeTableEntryId === selectedSubject.id) ||
+                    (r.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase() && (!r.component || !selectedSubject.component || r.component.toLowerCase() === (selectedSubject.component || selectedSubject.type || '').toLowerCase())) ||
+                    (r.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase())
+                  )
                 );
 
                 const currentStatus: AttendanceStatus | 'unmarked' = slotRecord ? slotRecord.status : 'unmarked';
 
-                // Subject overall statistics
-                const subjectRecords = (attendanceRecords || []).filter(r => 
-                  r.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase()
+                // Subject overall statistics calculated consistently with Attendance Tracker
+                const { subjectStats } = calculateAttendanceStats(
+                  timeTableEntries || [],
+                  attendanceRecords || [],
+                  semesterConfig || { startDate: format(toIST(new Date()), 'yyyy-MM-dd'), minAttendancePercent: 75 },
+                  {}
                 );
-                const totalPresent = subjectRecords.filter(r => r.status === 'present').length;
-                const totalAbsent = subjectRecords.filter(r => r.status === 'absent').length;
-                const totalConducted = totalPresent + totalAbsent;
-                const percent = totalConducted > 0 ? Math.round((totalPresent / totalConducted) * 100) : 0;
+                const subStat = subjectStats.find(s => s.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase());
+                const totalPresent = subStat ? subStat.present : 0;
+                const totalConducted = subStat ? subStat.totalConducted : 0;
+                const percent = subStat ? subStat.percentage : 0;
                 const minPct = semesterConfig?.minAttendancePercent || 75;
 
                 return (

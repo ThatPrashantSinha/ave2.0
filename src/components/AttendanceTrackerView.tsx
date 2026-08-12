@@ -10,43 +10,35 @@ import {
   calculateAttendanceStats, 
   getClassesForDate 
 } from '../lib/attendanceUtils';
+import { AttendanceStatusSymbol } from './AttendanceStatusSymbol';
 import { 
-  Check, 
-  X, 
-  Ban, 
   CalendarDays, 
   AlertTriangle, 
   ShieldCheck, 
   ShieldAlert, 
-  RotateCcw, 
-  Plus, 
-  Minus, 
   ChevronLeft, 
   ChevronRight, 
   SlidersHorizontal, 
-  Sparkles, 
-  CheckCircle2,
-  Trash2,
-  BookOpen,
+  MapPin, 
+  TrendingUp, 
+  Info, 
+  Calendar, 
+  History, 
+  GraduationCap,
+  RotateCw,
   Clock,
-  MapPin,
-  TrendingUp,
-  TrendingDown,
-  Info,
-  Calendar,
-  History,
-  GraduationCap
+  BookOpen
 } from 'lucide-react';
 import { cn, toIST } from '../lib/utils';
-import { format, parseISO, addDays, isBefore, isAfter } from 'date-fns';
+import { format, parseISO, addDays } from 'date-fns';
 
 interface AttendanceTrackerViewProps {
   entries: TimeTableEntry[];
   semesterConfig: SemesterConfig;
   attendanceRecords: AttendanceRecord[];
-  subjectManualAttendance: Record<string, SubjectManualAttendance>;
+  subjectManualAttendance?: Record<string, SubjectManualAttendance>;
   onUpdateSemesterConfig: (config: Partial<SemesterConfig>) => void;
-  onMarkAttendance: (
+  onMarkAttendance?: (
     date: string, 
     subject: string, 
     status: AttendanceStatus, 
@@ -55,9 +47,9 @@ interface AttendanceTrackerViewProps {
     code?: string,
     component?: string
   ) => void;
-  onMarkDayAll: (date: string, status: AttendanceStatus) => void;
-  onQuickAdjust: (subject: string, deltaPresent: number, deltaAbsent: number) => void;
-  onDeleteRecord: (id: string) => void;
+  onMarkDayAll?: (date: string, status: AttendanceStatus) => void;
+  onQuickAdjust?: (subject: string, deltaPresent: number, deltaAbsent: number) => void;
+  onDeleteRecord?: (id: string) => void;
   onResetToSample?: () => void;
   onClearAll?: () => void;
   initialSelectedDate?: string;
@@ -67,14 +59,7 @@ export function AttendanceTrackerView({
   entries,
   semesterConfig,
   attendanceRecords,
-  subjectManualAttendance,
   onUpdateSemesterConfig,
-  onMarkAttendance,
-  onMarkDayAll,
-  onQuickAdjust,
-  onDeleteRecord,
-  onResetToSample,
-  onClearAll,
   initialSelectedDate
 }: AttendanceTrackerViewProps) {
   const todayStr = format(toIST(new Date()), 'yyyy-MM-dd');
@@ -83,15 +68,15 @@ export function AttendanceTrackerView({
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'daily' | 'history'>('overview');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('ALL');
 
-  // Calculate live statistics
+  // Calculate live statistics strictly from calendar records
   const { subjectStats, totalStats } = useMemo(() => {
     return calculateAttendanceStats(
       entries,
       attendanceRecords,
       semesterConfig,
-      subjectManualAttendance
+      {}
     );
-  }, [entries, attendanceRecords, semesterConfig, subjectManualAttendance]);
+  }, [entries, attendanceRecords, semesterConfig]);
 
   // Scheduled classes for currently selected date
   const classesForSelectedDate = useMemo(() => {
@@ -110,7 +95,7 @@ export function AttendanceTrackerView({
 
   // Filter history records
   const filteredHistoryRecords = useMemo(() => {
-    return attendanceRecords
+    return (attendanceRecords || [])
       .filter(r => {
         if (selectedSubjectFilter !== 'ALL' && r.subject !== selectedSubjectFilter) return false;
         return true;
@@ -143,7 +128,7 @@ export function AttendanceTrackerView({
     <div className="flex flex-col space-y-4">
       
       {/* ------------------------------------------------------------- */}
-      {/* TOP CONFIGURATION & SEMESTER START DATE BAR                   */}
+      {/* TOP CONFIGURATION & AUTO-SYNC STATUS BAR                      */}
       {/* ------------------------------------------------------------- */}
       <div className="bg-paper border-[3px] border-ink p-3 shadow-[4px_4px_0px_#1A1A1B] flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -175,8 +160,13 @@ export function AttendanceTrackerView({
           </div>
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls & Sync Status */}
         <div className="flex items-center gap-2 flex-wrap w-full md:w-auto justify-end">
+          <div className="flex items-center gap-1.5 bg-emerald-100 text-emerald-950 border-2 border-emerald-700 px-2.5 py-1 rounded-3xs font-mono text-[8.5px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
+            <RotateCw size={11} className="text-emerald-800" />
+            <span>CALENDAR SYNCED (READ ONLY)</span>
+          </div>
+
           <button
             type="button"
             onClick={() => setIsConfigOpen(!isConfigOpen)}
@@ -189,6 +179,14 @@ export function AttendanceTrackerView({
             <span>{isConfigOpen ? 'CLOSE SETTINGS' : 'SEMESTER SETTINGS'}</span>
           </button>
         </div>
+      </div>
+
+      {/* INFORMATIVE SYNC CALLOUT */}
+      <div className="bg-taxi/20 border-2 border-ink p-2.5 shadow-[2px_2px_0px_#1A1A1B] flex items-center gap-2.5">
+        <Info size={16} className="text-subway-red shrink-0" />
+        <p className="font-mono text-[9px] font-bold text-ink uppercase leading-snug">
+          Attendance in this matrix is calculated strictly from classes logged in your <strong>Weekly Calendar</strong>. To record or update attendance, open your calendar and click any class slot directly.
+        </p>
       </div>
 
       {/* EXPANDABLE SETTINGS PANEL */}
@@ -220,21 +218,21 @@ export function AttendanceTrackerView({
                 <button
                   type="button"
                   onClick={() => onUpdateSemesterConfig({ startDate: format(addDays(toIST(new Date()), -30), 'yyyy-MM-dd') })}
-                  className="px-1.5 py-0.5 bg-paper border border-ink/40 font-mono text-[7.5px] uppercase font-bold hover:bg-taxi"
+                  className="px-1.5 py-0.5 bg-paper border border-ink/40 font-mono text-[7.5px] uppercase font-bold hover:bg-taxi cursor-pointer"
                 >
                   1 Mo Ago
                 </button>
                 <button
                   type="button"
                   onClick={() => onUpdateSemesterConfig({ startDate: format(addDays(toIST(new Date()), -60), 'yyyy-MM-dd') })}
-                  className="px-1.5 py-0.5 bg-paper border border-ink/40 font-mono text-[7.5px] uppercase font-bold hover:bg-taxi"
+                  className="px-1.5 py-0.5 bg-paper border border-ink/40 font-mono text-[7.5px] uppercase font-bold hover:bg-taxi cursor-pointer"
                 >
                   2 Mo Ago
                 </button>
                 <button
                   type="button"
                   onClick={() => onUpdateSemesterConfig({ startDate: todayStr })}
-                  className="px-1.5 py-0.5 bg-paper border border-ink/40 font-mono text-[7.5px] uppercase font-bold hover:bg-taxi"
+                  className="px-1.5 py-0.5 bg-paper border border-ink/40 font-mono text-[7.5px] uppercase font-bold hover:bg-taxi cursor-pointer"
                 >
                   Today
                 </button>
@@ -269,7 +267,7 @@ export function AttendanceTrackerView({
                     type="button"
                     onClick={() => onUpdateSemesterConfig({ minAttendancePercent: pct })}
                     className={cn(
-                      "px-2 py-0.5 border font-mono text-[8px] uppercase font-black transition-colors",
+                      "px-2 py-0.5 border font-mono text-[8px] uppercase font-black transition-colors cursor-pointer",
                       semesterConfig.minAttendancePercent === pct
                         ? "bg-ink text-paper border-ink"
                         : "bg-paper text-ink border-ink/40 hover:border-ink"
@@ -361,9 +359,9 @@ export function AttendanceTrackerView({
             </div>
           </div>
 
-          {/* Right Column: Breakdown Chips & Quick Log Shortcut */}
+          {/* Right Column: Breakdown Chips */}
           <div className="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end gap-2 w-full lg:w-auto">
-            <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto">
+            <div className="grid grid-cols-4 gap-1.5 w-full sm:w-auto">
               <div className="bg-paper border-2 border-ink p-2 text-center shadow-[2px_2px_0px_#1A1A1B]">
                 <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">PRESENT</div>
                 <div className="font-sans font-black text-base text-emerald-700">{totalStats.present}</div>
@@ -373,29 +371,19 @@ export function AttendanceTrackerView({
                 <div className="font-sans font-black text-base text-subway-red">{totalStats.absent}</div>
               </div>
               <div className="bg-paper border-2 border-ink p-2 text-center shadow-[2px_2px_0px_#1A1A1B]">
-                <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">OFF/CANCELLED</div>
+                <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">OFF/CANCEL</div>
                 <div className="font-sans font-black text-base text-stone-600">{totalStats.cancelled}</div>
               </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 pt-1 w-full justify-between lg:justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedDate(todayStr);
-                  setActiveSubTab('daily');
-                }}
-                className="px-3 py-1.5 bg-taxi text-ink font-mono text-[9px] font-black uppercase border-2 border-ink shadow-[2.5px_2.5px_0px_#1A1A1B] hover:bg-white active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <CalendarDays size={12} strokeWidth={2.5} />
-                <span>MARK TODAY'S ATTENDANCE ({todayStr})</span>
-              </button>
+              <div className="bg-paper border-2 border-ink p-2 text-center shadow-[2px_2px_0px_#1A1A1B]">
+                <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">TOTAL LOGS</div>
+                <div className="font-sans font-black text-base text-ink">{attendanceRecords.length}</div>
+              </div>
             </div>
           </div>
 
         </div>
 
-        {/* Global Visual Progress Bar with 75% target pin */}
+        {/* Global Visual Progress Bar with target criteria pin */}
         <div className="mt-4 pt-3 border-t border-ink/20 space-y-1">
           <div className="flex justify-between font-mono text-[8px] font-black uppercase text-ink/60">
             <span>0%</span>
@@ -410,7 +398,7 @@ export function AttendanceTrackerView({
               )}
               style={{ width: `${Math.min(100, Math.max(0, totalStats.percentage))}%` }}
             />
-            {/* Target 75% indicator line */}
+            {/* Target criteria indicator line */}
             <div
               className="absolute top-0 bottom-0 w-[3px] bg-ink z-10"
               style={{ left: `${totalStats.minPercent}%` }}
@@ -421,7 +409,7 @@ export function AttendanceTrackerView({
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* SUB-TAB NAVIGATOR (OVERVIEW vs DAILY LOGGER vs HISTORY)       */}
+      {/* SUB-TAB NAVIGATOR                                             */}
       {/* ------------------------------------------------------------- */}
       <div className="flex items-center justify-between border-b-2 border-ink gap-2 flex-wrap pt-2">
         <div className="flex items-center gap-1">
@@ -449,7 +437,7 @@ export function AttendanceTrackerView({
             )}
           >
             <CalendarDays size={12} strokeWidth={2.5} />
-            <span>DAILY ATTENDANCE LOG</span>
+            <span>DAY-BY-DAY SCHEDULE &amp; STATUS</span>
           </button>
 
           <button
@@ -467,8 +455,9 @@ export function AttendanceTrackerView({
           </button>
         </div>
 
-        <div className="font-mono text-[8px] font-bold text-ink/60 uppercase pb-1">
-          LIVE TILL: {todayStr}
+        <div className="font-mono text-[8px] font-bold text-ink/60 uppercase pb-1 flex items-center gap-1">
+          <RotateCw size={10} className="text-emerald-700" />
+          <span>AUTO-SYNCED TILL: {todayStr}</span>
         </div>
       </div>
 
@@ -482,7 +471,7 @@ export function AttendanceTrackerView({
               <GraduationCap size={32} className="mx-auto text-ink/40" />
               <div className="font-sans font-black text-base uppercase text-ink">NO SUBJECTS REGISTERED</div>
               <p className="font-mono text-[9.5px] text-ink/60 uppercase">
-                Add slots in the Schedule Matrix tab or import from Excel to track subject-wise attendance.
+                Add slots in the Timetable tab or import from Excel to track subject-wise attendance.
               </p>
             </div>
           ) : (
@@ -523,117 +512,78 @@ export function AttendanceTrackerView({
 
                         {/* Status Chip */}
                         {stat.totalConducted === 0 ? (
-                          <span className="font-mono text-[7.5px] font-bold uppercase bg-stone-100 text-stone-600 px-1.5 py-0.2 border border-ink/20">
-                            UNTRACKED
+                          <span className="px-1.5 py-0.2 bg-stone-100 text-ink/60 border border-ink/30 rounded-3xs font-mono text-[7.5px] font-bold uppercase">
+                            NO LOGS YET
                           </span>
-                        ) : isShortage ? (
-                          <span className="font-mono text-[7.5px] font-black uppercase bg-subway-red text-white px-1.5 py-0.2 border border-ink flex items-center gap-0.5">
-                            <AlertTriangle size={9} />
-                            <span>SHORTAGE ({stat.classesNeeded} NEEDED)</span>
+                        ) : stat.percentage >= totalStats.minPercent ? (
+                          <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-950 border border-emerald-600 rounded-3xs font-mono text-[7.5px] font-black uppercase flex items-center gap-0.5">
+                            <ShieldCheck size={10} className="text-emerald-700" />
+                            <span>SAFE ({stat.safeBunks} CAN BUNK)</span>
                           </span>
                         ) : (
-                          <span className="font-mono text-[7.5px] font-black uppercase bg-emerald-100 text-emerald-950 px-1.5 py-0.2 border border-emerald-600 flex items-center gap-0.5">
-                            <Check size={9} />
-                            <span>SAFE ({stat.safeBunks} CAN BUNK)</span>
+                          <span className="px-1.5 py-0.2 bg-rose-100 text-subway-red border border-red-600 rounded-3xs font-mono text-[7.5px] font-black uppercase flex items-center gap-0.5">
+                            <ShieldAlert size={10} className="text-subway-red" />
+                            <span>NEED {stat.classesNeeded} CLASSES</span>
                           </span>
                         )}
                       </div>
 
-                      {/* Subject Name */}
-                      <h4 className="font-sans font-black text-sm uppercase tracking-tight text-ink leading-snug">
+                      <h3 className="font-sans font-black text-base uppercase text-ink tracking-tight leading-snug">
                         {stat.subject}
-                      </h4>
+                      </h3>
 
                       {stat.venue && (
-                        <div className="font-mono text-[7.5px] font-bold text-ink/60 uppercase flex items-center gap-1">
-                          <MapPin size={9} className="text-subway-red" />
+                        <div className="flex items-center gap-1 font-mono text-[8px] text-ink/60 uppercase font-bold">
+                          <MapPin size={10} className="text-subway-red shrink-0" />
                           <span className="truncate">{stat.venue}</span>
                         </div>
                       )}
                     </div>
 
-                    {/* Middle: Attendance Numbers & Progress Bar */}
-                    <div className="space-y-1.5 pt-1 border-t border-ink/10">
-                      <div className="flex justify-between items-baseline">
-                        <div className="flex items-baseline gap-1.5">
+                    {/* Middle: Live Percentage & Numbers */}
+                    <div className="space-y-1.5 bg-paper-dark border border-ink/20 p-2.5 rounded-xs">
+                      <div className="flex items-baseline justify-between">
+                        <div className="flex items-baseline gap-2">
                           <span className={cn(
-                            "font-sans font-black text-2xl uppercase leading-none",
-                            isShortage ? "text-subway-red" : "text-emerald-800"
+                            "font-sans font-black text-2xl uppercase",
+                            stat.totalConducted === 0 ? "text-ink/60" : stat.percentage >= totalStats.minPercent ? "text-emerald-800" : "text-subway-red"
                           )}>
-                            {stat.percentage}%
+                            {stat.totalConducted === 0 ? '—' : `${stat.percentage}%`}
                           </span>
-                          <span className="font-mono text-[9px] font-black text-ink uppercase">
+                          <span className="font-mono text-[9px] font-bold text-ink/75 uppercase">
                             ({stat.present}/{stat.totalConducted} classes)
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2 font-mono text-[8px] font-bold text-ink/60">
-                          <span className="text-emerald-700 font-black">{stat.present}P</span>
-                          <span>/</span>
-                          <span className="text-subway-red font-black">{stat.absent}A</span>
+                        <div className="flex items-center gap-1.5 font-mono text-[8px] font-bold uppercase">
+                          <span className="text-emerald-700">{stat.present}P</span>
+                          <span className="text-ink/30">•</span>
+                          <span className="text-subway-red">{stat.absent}A</span>
                           {stat.cancelled > 0 && (
                             <>
-                              <span>/</span>
+                              <span className="text-ink/30">•</span>
                               <span className="text-stone-500">{stat.cancelled}Off</span>
                             </>
                           )}
                         </div>
                       </div>
 
-                      {/* Progress Bar */}
-                      <div className="relative w-full h-2.5 bg-paper-dark border border-ink/40 overflow-hidden">
+                      {/* Visual Bar */}
+                      <div className="relative w-full h-2 bg-paper border border-ink/30 overflow-hidden">
                         <div
                           className={cn(
-                            "h-full transition-all duration-200",
+                            "h-full transition-all duration-300",
                             stat.percentage >= totalStats.minPercent ? "bg-emerald-500" : "bg-subway-red"
                           )}
                           style={{ width: `${Math.min(100, Math.max(0, stat.percentage))}%` }}
                         />
-                        <div
-                          className="absolute top-0 bottom-0 w-[2px] bg-ink/70"
-                          style={{ left: `${totalStats.minPercent}%` }}
-                        />
                       </div>
                     </div>
 
-                    {/* Bottom: Quick Adjustment Buttons (+Present / +Absent) */}
-                    <div className="flex items-center justify-between pt-2 border-t border-dashed border-ink/20 gap-2">
-                      <div className="font-mono text-[7.5px] font-black text-ink/50 uppercase">
-                        QUICK ADJUST:
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => onQuickAdjust(stat.subject, 1, 0)}
-                          className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border border-emerald-700 font-mono text-[8px] font-black uppercase rounded-3xs shadow-2xs active:translate-y-0.5 cursor-pointer flex items-center gap-0.5"
-                          title="Add 1 Present to total"
-                        >
-                          <Plus size={9} />
-                          <span>1 PRESENT</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => onQuickAdjust(stat.subject, 0, 1)}
-                          className="px-2 py-1 bg-red-100 hover:bg-red-200 text-subway-red border border-red-700 font-mono text-[8px] font-black uppercase rounded-3xs shadow-2xs active:translate-y-0.5 cursor-pointer flex items-center gap-0.5"
-                          title="Add 1 Absent to total"
-                        >
-                          <Plus size={9} />
-                          <span>1 ABSENT</span>
-                        </button>
-
-                        {(subjectManualAttendance[stat.subject]?.extraPresent > 0 || subjectManualAttendance[stat.subject]?.extraAbsent > 0) && (
-                          <button
-                            type="button"
-                            onClick={() => onQuickAdjust(stat.subject, -1, 0)}
-                            className="px-1.5 py-1 bg-stone-100 text-ink/70 hover:text-ink border border-ink/30 font-mono text-[7.5px] font-bold uppercase rounded-3xs"
-                            title="Undo extra adjustment"
-                          >
-                            <RotateCcw size={9} />
-                          </button>
-                        )}
-                      </div>
+                    {/* Bottom: Read-only breakdown note */}
+                    <div className="flex items-center justify-between pt-1.5 border-t border-dashed border-ink/20 font-mono text-[8px] uppercase text-ink/60">
+                      <span>{stat.scheduledWeeklyCount} weekly slots</span>
+                      <span className="font-bold text-ink/80">{stat.present} attended • {stat.absent} missed</span>
                     </div>
 
                   </div>
@@ -645,7 +595,7 @@ export function AttendanceTrackerView({
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* TAB 2: DAILY ATTENDANCE MARKER                                */}
+      {/* TAB 2: DAY-BY-DAY SCHEDULE & STATUS (READ-ONLY)               */}
       {/* ------------------------------------------------------------- */}
       {activeSubTab === 'daily' && (
         <div className="bg-paper border-[3px] border-ink p-4 shadow-[5px_5px_0px_#1A1A1B] space-y-4">
@@ -689,7 +639,7 @@ export function AttendanceTrackerView({
               </button>
             </div>
 
-            {/* Quick Pick Date & Bulk Mark Buttons */}
+            {/* Quick Pick Date */}
             <div className="flex items-center gap-2 flex-wrap">
               <input
                 type="date"
@@ -702,34 +652,12 @@ export function AttendanceTrackerView({
                 type="button"
                 onClick={() => setSelectedDate(todayStr)}
                 className={cn(
-                  "px-2 py-1 font-mono text-[8.5px] font-black uppercase border-2 border-ink transition-colors cursor-pointer",
+                  "px-2.5 py-1 font-mono text-[8.5px] font-black uppercase border-2 border-ink transition-colors cursor-pointer",
                   selectedDate === todayStr ? "bg-ink text-paper" : "bg-paper text-ink hover:bg-taxi"
                 )}
               >
                 TODAY
               </button>
-
-              {classesForSelectedDate.length > 0 && (
-                <div className="flex items-center gap-1 pl-2 border-l border-ink/30">
-                  <button
-                    type="button"
-                    onClick={() => onMarkDayAll(selectedDate, 'present')}
-                    className="px-2.5 py-1 bg-emerald-400 hover:bg-emerald-300 text-ink font-mono text-[8.5px] font-black uppercase border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 cursor-pointer flex items-center gap-1"
-                  >
-                    <Check size={11} strokeWidth={3} />
-                    <span>MARK ALL PRESENT</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => onMarkDayAll(selectedDate, 'absent')}
-                    className="px-2.5 py-1 bg-rose-400 hover:bg-rose-300 text-ink font-mono text-[8.5px] font-black uppercase border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 cursor-pointer flex items-center gap-1"
-                  >
-                    <X size={11} strokeWidth={3} />
-                    <span>MARK ALL ABSENT</span>
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
@@ -741,12 +669,12 @@ export function AttendanceTrackerView({
                 NO CLASSES SCHEDULED FOR THIS DAY OF THE WEEK
               </div>
               <p className="font-mono text-[8.5px] font-bold text-ink/50 uppercase">
-                Choose a different weekday or register class slots for this day in the Schedule Matrix tab.
+                Choose a different weekday or register class slots for this day in the Timetable Schedule tab.
               </p>
             </div>
           ) : (
             <div className="space-y-2.5">
-              {classesForSelectedDate.map(({ entry, record, status }) => {
+              {classesForSelectedDate.map(({ entry, status }) => {
                 return (
                   <div
                     key={entry.id}
@@ -787,66 +715,32 @@ export function AttendanceTrackerView({
                       </div>
                     </div>
 
-                    {/* Right: Interactive 3-Way Attendance Selector */}
-                    <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto justify-end">
-                      
-                      {/* Present Button */}
-                      <button
-                        type="button"
-                        onClick={() => onMarkAttendance(selectedDate, entry.subject, 'present', entry.id, undefined, entry.code, entry.component)}
-                        className={cn(
-                          "px-3 py-1.5 font-mono text-[9px] font-black uppercase border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center gap-1 cursor-pointer",
-                          status === 'present'
-                            ? "bg-emerald-500 text-white ring-2 ring-ink"
-                            : "bg-paper hover:bg-emerald-100 text-emerald-950"
-                        )}
-                      >
-                        <Check size={12} strokeWidth={3} />
-                        <span>PRESENT</span>
-                      </button>
-
-                      {/* Absent Button */}
-                      <button
-                        type="button"
-                        onClick={() => onMarkAttendance(selectedDate, entry.subject, 'absent', entry.id, undefined, entry.code, entry.component)}
-                        className={cn(
-                          "px-3 py-1.5 font-mono text-[9px] font-black uppercase border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center gap-1 cursor-pointer",
-                          status === 'absent'
-                            ? "bg-subway-red text-white ring-2 ring-ink"
-                            : "bg-paper hover:bg-rose-100 text-rose-950"
-                        )}
-                      >
-                        <X size={12} strokeWidth={3} />
-                        <span>ABSENT</span>
-                      </button>
-
-                      {/* Cancelled / Off Button */}
-                      <button
-                        type="button"
-                        onClick={() => onMarkAttendance(selectedDate, entry.subject, 'cancelled', entry.id, undefined, entry.code, entry.component)}
-                        className={cn(
-                          "px-2 py-1.5 font-mono text-[8.5px] font-bold uppercase border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center gap-1 cursor-pointer",
-                          status === 'cancelled'
-                            ? "bg-stone-700 text-white ring-2 ring-ink"
-                            : "bg-paper hover:bg-stone-200 text-ink/60"
-                        )}
-                        title="Class was cancelled by professor or holiday (does not count against percentage)"
-                      >
-                        <Ban size={10} />
-                        <span>CANCELLED</span>
-                      </button>
-
-                      {status !== 'unmarked' && record && (
-                        <button
-                          type="button"
-                          onClick={() => onDeleteRecord(record.id)}
-                          className="p-1 text-ink/30 hover:text-subway-red cursor-pointer"
-                          title="Remove logged status"
-                        >
-                          <RotateCcw size={11} />
-                        </button>
+                    {/* Right: Read-Only Synced Status Badge */}
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                      {status === 'present' && (
+                        <div className="flex items-center gap-1.5 bg-emerald-100 border-2 border-emerald-700 text-emerald-950 px-3 py-1.5 rounded-3xs font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
+                          <AttendanceStatusSymbol status="present" size="sm" />
+                          <span>PRESENT</span>
+                        </div>
                       )}
-
+                      {status === 'absent' && (
+                        <div className="flex items-center gap-1.5 bg-rose-100 border-2 border-rose-700 text-subway-red px-3 py-1.5 rounded-3xs font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
+                          <AttendanceStatusSymbol status="absent" size="sm" />
+                          <span>ABSENT</span>
+                        </div>
+                      )}
+                      {status === 'cancelled' && (
+                        <div className="flex items-center gap-1.5 bg-stone-200 border-2 border-stone-600 text-stone-800 px-3 py-1.5 rounded-3xs font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
+                          <AttendanceStatusSymbol status="cancelled" size="sm" />
+                          <span>CANCELLED</span>
+                        </div>
+                      )}
+                      {status === 'unmarked' && (
+                        <div className="flex items-center gap-1.5 bg-amber-50 border-2 border-amber-600 text-amber-950 px-3 py-1.5 rounded-3xs font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
+                          <AttendanceStatusSymbol status="unmarked" size="sm" />
+                          <span>NOT LOGGED</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -854,11 +748,18 @@ export function AttendanceTrackerView({
             </div>
           )}
 
+          <div className="p-3 bg-paper-dark border border-ink/20 rounded-xs flex items-center justify-between gap-2 text-ink/70 font-mono text-[8.5px] uppercase font-bold">
+            <span className="flex items-center gap-1">
+              <Info size={12} className="text-subway-red" />
+              <span>To mark or change attendance for these classes, open the <strong>Weekly Calendar</strong>.</span>
+            </span>
+          </div>
+
         </div>
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* TAB 3: ATTENDANCE HISTORY LOGS                                */}
+      {/* TAB 3: ATTENDANCE HISTORY LOGS (READ-ONLY)                    */}
       {/* ------------------------------------------------------------- */}
       {activeSubTab === 'history' && (
         <div className="bg-paper border-[3px] border-ink p-4 shadow-[5px_5px_0px_#1A1A1B] space-y-3">
@@ -870,7 +771,7 @@ export function AttendanceTrackerView({
                 ATTENDANCE LOG HISTORY
               </h4>
               <p className="font-mono text-[8px] font-bold text-ink/60 uppercase">
-                {filteredHistoryRecords.length} LOGGED SESSIONS FROM SEMESTER START ({semesterConfig.startDate})
+                {filteredHistoryRecords.length} LOGGED SESSIONS SYNCED FROM WEEKLY CALENDAR
               </p>
             </div>
 
@@ -893,7 +794,7 @@ export function AttendanceTrackerView({
           {/* History Records List */}
           {filteredHistoryRecords.length === 0 ? (
             <div className="p-6 text-center text-ink/40 font-mono text-[9px] uppercase font-bold">
-              NO ATTENDANCE RECORDS LOGGED YET
+              NO ATTENDANCE RECORDS LOGGED YET. LOG CLASSES IN THE WEEKLY CALENDAR TO SEE THEM HERE.
             </div>
           ) : (
             <div className="max-h-[420px] overflow-y-auto space-y-1.5 pr-1">
@@ -924,7 +825,8 @@ export function AttendanceTrackerView({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <AttendanceStatusSymbol status={rec.status} size="xs" />
                     <span className={cn(
                       "px-2 py-0.5 font-mono text-[8px] font-black uppercase rounded-3xs border",
                       rec.status === 'present' && "bg-emerald-100 text-emerald-950 border-emerald-600",
@@ -933,15 +835,6 @@ export function AttendanceTrackerView({
                     )}>
                       {rec.status.toUpperCase()}
                     </span>
-
-                    <button
-                      type="button"
-                      onClick={() => onDeleteRecord(rec.id)}
-                      className="p-1 text-ink/40 hover:text-subway-red cursor-pointer"
-                      title="Delete record"
-                    >
-                      <Trash2 size={11} />
-                    </button>
                   </div>
                 </div>
               ))}
