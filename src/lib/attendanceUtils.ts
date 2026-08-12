@@ -86,18 +86,19 @@ export function calculateAttendanceStats(
   let totalAbsent = 0;
   let totalCancelled = 0;
 
-  // Filter records within semester range (>= startDate and <= targetDate)
+  // All recorded attendance marks from semester start date onwards
   const startISO = semesterConfig.startDate;
-  const targetISO = format(targetDate, 'yyyy-MM-dd');
 
   const validRecords = records.filter(r => {
     if (startISO && r.date < startISO) return false;
-    if (r.date > targetISO) return false;
     return true;
   });
 
   subjectsMap.forEach((info, subjectKey) => {
-    const subjectRecords = validRecords.filter(r => r.subject.trim().toLowerCase() === subjectKey.toLowerCase());
+    const subjectRecords = validRecords.filter(r => 
+      r.subject.trim().toLowerCase() === subjectKey.trim().toLowerCase() ||
+      (r.code && info.code && r.code.trim().toLowerCase() === info.code.trim().toLowerCase())
+    );
     
     let present = subjectRecords.filter(r => r.status === 'present').length;
     let absent = subjectRecords.filter(r => r.status === 'absent').length;
@@ -246,7 +247,11 @@ export function getClassesForDate(
 
   return matchingEntries.map(entry => {
     // Check if there is a record for this specific entry id or matching subject
-    const rec = recordsForDate.find(r => r.timeTableEntryId === entry.id || r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase());
+    const rec = recordsForDate.find(r => 
+      (r.timeTableEntryId && r.timeTableEntryId === entry.id) ||
+      (r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase() && (!r.component || !entry.component || r.component.toLowerCase() === (entry.component || entry.type || '').toLowerCase())) ||
+      (r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase())
+    );
     return {
       entry,
       record: rec,
