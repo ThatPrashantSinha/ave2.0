@@ -1697,8 +1697,7 @@ export function WeeklyCalendar({
                             r.date === dayStr && 
                             (
                               (r.timeTableEntryId && r.timeTableEntryId === entry.id) ||
-                              (r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase() && (!r.component || !entry.component || r.component.toLowerCase() === (entry.component || entry.type || '').toLowerCase())) ||
-                              (r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase())
+                              (!r.timeTableEntryId && r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase() && (!r.component || !entry.component || r.component.toLowerCase() === (entry.component || entry.type || '').toLowerCase()))
                             )
                           );
 
@@ -3015,8 +3014,7 @@ export function WeeklyCalendar({
                   r.date === slotDateStr && 
                   (
                     (r.timeTableEntryId && r.timeTableEntryId === selectedSubject.id) ||
-                    (r.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase() && (!r.component || !selectedSubject.component || r.component.toLowerCase() === (selectedSubject.component || selectedSubject.type || '').toLowerCase())) ||
-                    (r.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase())
+                    (!r.timeTableEntryId && r.subject.trim().toLowerCase() === selectedSubject.subject.trim().toLowerCase() && (!r.component || !selectedSubject.component || r.component.toLowerCase() === (selectedSubject.component || selectedSubject.type || '').toLowerCase()))
                   )
                 );
 

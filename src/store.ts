@@ -309,13 +309,28 @@ export function useStore() {
     component?: string
   ) => {
     setAttendanceRecords(prev => {
-      const existingIdx = prev.findIndex(r => 
-        r.date === date && (
-          (timeTableEntryId && r.timeTableEntryId === timeTableEntryId) ||
-          (r.subject.trim().toLowerCase() === subject.trim().toLowerCase() && (!component || !r.component || r.component.toLowerCase() === component.toLowerCase())) ||
-          (r.subject.trim().toLowerCase() === subject.trim().toLowerCase())
-        )
-      );
+      const existingIdx = prev.findIndex(r => {
+        if (r.date !== date) return false;
+        if (timeTableEntryId) {
+          if (r.timeTableEntryId) {
+            return r.timeTableEntryId === timeTableEntryId;
+          }
+          // Legacy record without timeTableEntryId
+          if (r.subject.trim().toLowerCase() === subject.trim().toLowerCase()) {
+            if (component && r.component) {
+              return r.component.toLowerCase() === component.toLowerCase();
+            }
+            return true;
+          }
+          return false;
+        } else {
+          if (r.subject.trim().toLowerCase() !== subject.trim().toLowerCase()) return false;
+          if (component && r.component) {
+            return r.component.toLowerCase() === component.toLowerCase();
+          }
+          return true;
+        }
+      });
 
       let updated: AttendanceRecord[];
       if (existingIdx >= 0) {
@@ -365,7 +380,10 @@ export function useStore() {
       let updated = [...prev];
       dayEntries.forEach(entry => {
         const existingIdx = updated.findIndex(r => 
-          r.date === date && (r.timeTableEntryId === entry.id || r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase())
+          r.date === date && (
+            (r.timeTableEntryId && r.timeTableEntryId === entry.id) ||
+            (!r.timeTableEntryId && r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase() && (!r.component || !entry.component || r.component.toLowerCase() === (entry.component || entry.type || '').toLowerCase()))
+          )
         );
 
         if (existingIdx >= 0) {

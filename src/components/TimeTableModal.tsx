@@ -1441,7 +1441,7 @@ export function TimeTableModal({
                 {(() => {
                   const subStat = subjectStats.find(s => s.subject.trim().toLowerCase() === selectedEntry.subject.trim().toLowerCase());
                   const todayDateStr = format(toIST(new Date()), 'yyyy-MM-dd');
-                  const todayRec = attendanceRecords.find(r => r.date === todayDateStr && (r.timeTableEntryId === selectedEntry.id || r.subject === selectedEntry.subject));
+                  const todayRec = attendanceRecords.find(r => r.date === todayDateStr && ((r.timeTableEntryId && r.timeTableEntryId === selectedEntry.id) || (!r.timeTableEntryId && r.subject.trim().toLowerCase() === selectedEntry.subject.trim().toLowerCase())));
 
                   return (
                     <div className="bg-paper border-2 border-ink p-3 rounded-xs shadow-[2px_2px_0px_#1A1A1B] space-y-2">

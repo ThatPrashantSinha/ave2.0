@@ -101,7 +101,7 @@ export function calculateAttendanceStats(
     // Deduplicate records for the same date + entry if any
     const seenMap = new Map<string, AttendanceRecord>();
     subjectRecords.forEach(r => {
-      const recKey = `${r.date}_${r.timeTableEntryId || r.subject}`;
+      const recKey = `${r.date}_${r.timeTableEntryId || r.id || r.subject}`;
       if (!seenMap.has(recKey)) {
         seenMap.set(recKey, r);
       }
@@ -250,8 +250,7 @@ export function getClassesForDate(
     // Check if there is a record for this specific entry id or matching subject
     const rec = recordsForDate.find(r => 
       (r.timeTableEntryId && r.timeTableEntryId === entry.id) ||
-      (r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase() && (!r.component || !entry.component || r.component.toLowerCase() === (entry.component || entry.type || '').toLowerCase())) ||
-      (r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase())
+      (!r.timeTableEntryId && r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase() && (!r.component || !entry.component || r.component.toLowerCase() === (entry.component || entry.type || '').toLowerCase()))
     );
     return {
       entry,
