@@ -8,7 +8,8 @@ import {
 } from '../types';
 import { 
   calculateAttendanceStats, 
-  getClassesForDate 
+  getClassesForDate,
+  getDatesInRange 
 } from '../lib/attendanceUtils';
 import { AttendanceStatusSymbol } from './AttendanceStatusSymbol';
 import { 
@@ -27,10 +28,17 @@ import {
   GraduationCap,
   RotateCw,
   Clock,
-  BookOpen
+  BookOpen,
+  Palmtree,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  CalendarRange,
+  Search,
+  X
 } from 'lucide-react';
 import { cn, toIST } from '../lib/utils';
-import { format, parseISO, addDays } from 'date-fns';
+import { format, parseISO, addDays, isBefore, isAfter } from 'date-fns';
 
 interface AttendanceTrackerViewProps {
   entries: TimeTableEntry[];
@@ -65,10 +73,22 @@ export function AttendanceTrackerView({
   const todayStr = format(toIST(new Date()), 'yyyy-MM-dd');
   const [selectedDate, setSelectedDate] = useState<string>(initialSelectedDate || todayStr);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'daily' | 'history'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'daily' | 'holidays' | 'history'>('overview');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('ALL');
 
-  // Calculate live statistics strictly from calendar records
+  // Single holiday form state
+  const [singleHolidayDate, setSingleHolidayDate] = useState<string>(todayStr);
+  const [singleHolidayName, setSingleHolidayName] = useState<string>('');
+
+  // Date range holiday form state
+  const [rangeStartDate, setRangeStartDate] = useState<string>(todayStr);
+  const [rangeEndDate, setRangeEndDate] = useState<string>(format(addDays(parseISO(todayStr), 2), 'yyyy-MM-dd'));
+  const [rangeHolidayName, setRangeHolidayName] = useState<string>('');
+
+  // Holidays list filter / search
+  const [holidaySearchQuery, setHolidaySearchQuery] = useState<string>('');
+
+  // Calculate live statistics strictly from calendar records and excluding holidays
   const { subjectStats, totalStats } = useMemo(() => {
     return calculateAttendanceStats(
       entries,
@@ -78,10 +98,19 @@ export function AttendanceTrackerView({
     );
   }, [entries, attendanceRecords, semesterConfig]);
 
-  // Scheduled classes for currently selected date
+  // Scheduled classes for currently selected date (holiday-aware)
   const classesForSelectedDate = useMemo(() => {
-    return getClassesForDate(selectedDate, entries, attendanceRecords);
-  }, [selectedDate, entries, attendanceRecords]);
+    return getClassesForDate(selectedDate, entries, attendanceRecords, semesterConfig.holidays);
+  }, [selectedDate, entries, attendanceRecords, semesterConfig.holidays]);
+
+  // Whether selected date is an academic holiday
+  const isSelectedDateHoliday = useMemo(() => {
+    return (semesterConfig.holidays || []).includes(selectedDate);
+  }, [selectedDate, semesterConfig.holidays]);
+
+  const selectedDateHolidayLabel = useMemo(() => {
+    return semesterConfig.holidayLabels?.[selectedDate] || '';
+  }, [selectedDate, semesterConfig.holidayLabels]);
 
   // Formatted date header for selected day
   const formattedSelectedDate = useMemo(() => {
@@ -93,7 +122,7 @@ export function AttendanceTrackerView({
     }
   }, [selectedDate]);
 
-  // Filter history records
+  // Filter history records (excluding holiday dates from history or showing them clearly)
   const filteredHistoryRecords = useMemo(() => {
     return (attendanceRecords || [])
       .filter(r => {
@@ -123,6 +152,138 @@ export function AttendanceTrackerView({
     const minStr = m.toString().padStart(2, '0');
     return `${hour12}:${minStr} ${period}`;
   };
+
+  // --- Holiday Management Handlers ---
+  const handleToggleCurrentDayHoliday = () => {
+    const currentHolidays = semesterConfig.holidays || [];
+    const currentLabels = { ...(semesterConfig.holidayLabels || {}) };
+    
+    if (currentHolidays.includes(selectedDate)) {
+      // Remove holiday
+      const updated = currentHolidays.filter(d => d !== selectedDate);
+      delete currentLabels[selectedDate];
+      onUpdateSemesterConfig({
+        holidays: updated,
+        holidayLabels: currentLabels
+      });
+    } else {
+      // Add holiday
+      const updated = [...currentHolidays, selectedDate].sort();
+      onUpdateSemesterConfig({
+        holidays: updated,
+        holidayLabels: currentLabels
+      });
+    }
+  };
+
+  const handleAddSingleHoliday = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!singleHolidayDate) return;
+
+    const currentHolidays = semesterConfig.holidays || [];
+    const currentLabels = { ...(semesterConfig.holidayLabels || {}) };
+
+    if (!currentHolidays.includes(singleHolidayDate)) {
+      currentHolidays.push(singleHolidayDate);
+      currentHolidays.sort();
+    }
+
+    if (singleHolidayName.trim()) {
+      currentLabels[singleHolidayDate] = singleHolidayName.trim();
+    }
+
+    onUpdateSemesterConfig({
+      holidays: [...currentHolidays],
+      holidayLabels: currentLabels
+    });
+
+    setSingleHolidayName('');
+  };
+
+  const handleAddHolidayRange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rangeStartDate || !rangeEndDate) return;
+
+    const dates = getDatesInRange(rangeStartDate, rangeEndDate);
+    if (dates.length === 0) return;
+
+    const currentHolidays = new Set(semesterConfig.holidays || []);
+    const currentLabels = { ...(semesterConfig.holidayLabels || {}) };
+
+    dates.forEach(d => {
+      currentHolidays.add(d);
+      if (rangeHolidayName.trim()) {
+        currentLabels[d] = rangeHolidayName.trim();
+      }
+    });
+
+    const updatedArray = Array.from(currentHolidays).sort();
+
+    onUpdateSemesterConfig({
+      holidays: updatedArray,
+      holidayLabels: currentLabels
+    });
+
+    setRangeHolidayName('');
+  };
+
+  const handleRemoveHoliday = (dateStr: string) => {
+    const currentHolidays = semesterConfig.holidays || [];
+    const currentLabels = { ...(semesterConfig.holidayLabels || {}) };
+    
+    const updated = currentHolidays.filter(d => d !== dateStr);
+    delete currentLabels[dateStr];
+
+    onUpdateSemesterConfig({
+      holidays: updated,
+      holidayLabels: currentLabels
+    });
+  };
+
+  const handleClearAllHolidays = () => {
+    if (window.confirm('Are you sure you want to remove all marked holidays? Classes on those dates will count towards attendance again.')) {
+      onUpdateSemesterConfig({
+        holidays: [],
+        holidayLabels: {}
+      });
+    }
+  };
+
+  // Grouped active holidays list for clean display
+  const activeHolidaysList = useMemo(() => {
+    const holidays = (semesterConfig.holidays || []).slice().sort();
+    const labels = semesterConfig.holidayLabels || {};
+    
+    return holidays
+      .filter(dateStr => {
+        if (!holidaySearchQuery.trim()) return true;
+        const q = holidaySearchQuery.toLowerCase();
+        const label = (labels[dateStr] || '').toLowerCase();
+        return dateStr.includes(q) || label.includes(q);
+      })
+      .map(dateStr => {
+        let formatted = dateStr;
+        let dayName = '';
+        try {
+          const parsed = parseISO(dateStr);
+          formatted = format(parsed, 'dd MMM yyyy');
+          dayName = format(parsed, 'EEEE');
+        } catch (e) {}
+
+        return {
+          dateStr,
+          formatted,
+          dayName,
+          label: labels[dateStr] || ''
+        };
+      });
+  }, [semesterConfig.holidays, semesterConfig.holidayLabels, holidaySearchQuery]);
+
+  // Count of days in range preview
+  const rangeCountPreview = useMemo(() => {
+    if (!rangeStartDate || !rangeEndDate) return 0;
+    return getDatesInRange(rangeStartDate, rangeEndDate).length;
+  }, [rangeStartDate, rangeEndDate]);
 
   return (
     <div className="flex flex-col space-y-4">
@@ -158,6 +319,22 @@ export function AttendanceTrackerView({
           <div className="flex items-center gap-1 bg-taxi/20 border border-ink/40 px-2 py-1 font-mono text-[8.5px] font-black text-ink">
             <span>TARGET: {semesterConfig.minAttendancePercent}% MIN</span>
           </div>
+
+          {/* Holiday Count Badge */}
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('holidays')}
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 font-mono text-[8.5px] font-black uppercase border border-ink/40 transition-colors cursor-pointer",
+              (semesterConfig.holidays || []).length > 0 
+                ? "bg-amber-100 text-amber-950 hover:bg-amber-200 border-amber-800" 
+                : "bg-paper-dark text-ink/70 hover:bg-stone-100"
+            )}
+            title="Click to manage academic holidays"
+          >
+            <Palmtree size={11} className="text-amber-800" />
+            <span>{(semesterConfig.holidays || []).length} HOLIDAYS EXCLUDED</span>
+          </button>
         </div>
 
         {/* Action Controls & Sync Status */}
@@ -166,6 +343,18 @@ export function AttendanceTrackerView({
             <RotateCw size={11} className="text-emerald-800" />
             <span>CALENDAR SYNCED (READ ONLY)</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('holidays')}
+            className={cn(
+              "px-2.5 py-1 font-mono text-[9px] uppercase font-black border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center gap-1 cursor-pointer",
+              activeSubTab === 'holidays' ? "bg-amber-400 text-ink" : "bg-paper hover:bg-amber-100 text-ink"
+            )}
+          >
+            <Palmtree size={12} className="text-amber-900" />
+            <span>MANAGE HOLIDAYS ({(semesterConfig.holidays || []).length})</span>
+          </button>
 
           <button
             type="button"
@@ -182,11 +371,21 @@ export function AttendanceTrackerView({
       </div>
 
       {/* INFORMATIVE SYNC CALLOUT */}
-      <div className="bg-taxi/20 border-2 border-ink p-2.5 shadow-[2px_2px_0px_#1A1A1B] flex items-center gap-2.5">
-        <Info size={16} className="text-subway-red shrink-0" />
-        <p className="font-mono text-[9px] font-bold text-ink uppercase leading-snug">
-          Attendance in this matrix is calculated strictly from classes logged in your <strong>Weekly Calendar</strong>. To record or update attendance, open your calendar and click any class slot directly.
-        </p>
+      <div className="bg-taxi/20 border-2 border-ink p-2.5 shadow-[2px_2px_0px_#1A1A1B] flex items-center justify-between gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <Info size={16} className="text-subway-red shrink-0" />
+          <p className="font-mono text-[9px] font-bold text-ink uppercase leading-snug">
+            Attendance is calculated strictly from your <strong>Weekly Calendar</strong>. Days marked as <strong>Holidays</strong> are automatically excluded so classes on those dates do not count against your attendance.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('holidays')}
+          className="text-[8.5px] font-mono font-black uppercase text-amber-950 underline hover:text-ink cursor-pointer shrink-0"
+        >
+          Manage Off-Days &amp; Vacations →
+        </button>
       </div>
 
       {/* EXPANDABLE SETTINGS PANEL */}
@@ -291,9 +490,21 @@ export function AttendanceTrackerView({
                 onChange={e => onUpdateSemesterConfig({ name: e.target.value })}
                 className="w-full bg-paper border-2 border-ink px-2.5 py-1.5 font-mono text-xs font-bold uppercase focus:outline-none focus:bg-white"
               />
-              <p className="font-mono text-[7.5px] text-ink/50 uppercase font-bold pt-1">
-                Used in attendance reports & statistics
-              </p>
+              <div className="pt-1 flex items-center justify-between">
+                <p className="font-mono text-[7.5px] text-ink/50 uppercase font-bold">
+                  {(semesterConfig.holidays || []).length} active holidays configured
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsConfigOpen(false);
+                    setActiveSubTab('holidays');
+                  }}
+                  className="font-mono text-[7.5px] font-black text-amber-900 uppercase underline cursor-pointer"
+                >
+                  Manage Holidays →
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -325,6 +536,13 @@ export function AttendanceTrackerView({
                   <span>ATTENDANCE SHORTAGE RISK (&lt; {totalStats.minPercent}%)</span>
                 </span>
               )}
+
+              {(semesterConfig.holidays || []).length > 0 && (
+                <span className="flex items-center gap-1 font-mono text-[8.5px] font-black uppercase bg-amber-200 text-amber-950 border border-amber-700 px-2 py-0.5 rounded-3xs">
+                  <Palmtree size={11} className="text-amber-900" />
+                  <span>{(semesterConfig.holidays || []).length} HOLIDAYS EXCLUDED</span>
+                </span>
+              )}
             </div>
 
             <div className="flex items-baseline gap-3">
@@ -340,7 +558,7 @@ export function AttendanceTrackerView({
             </div>
 
             {/* Smart Bunk Allowance / Required Classes Note */}
-            <div className="font-mono text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 pt-0.5">
+            <div className="font-mono text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 pt-0.5 flex-wrap">
               {totalStats.isEligible ? (
                 <div className="text-emerald-950 bg-emerald-200/70 border border-emerald-600 px-2 py-0.5 rounded-3xs flex items-center gap-1">
                   <TrendingUp size={13} className="text-emerald-800" />
@@ -371,8 +589,8 @@ export function AttendanceTrackerView({
                 <div className="font-sans font-black text-base text-subway-red">{totalStats.absent}</div>
               </div>
               <div className="bg-paper border-2 border-ink p-2 text-center shadow-[2px_2px_0px_#1A1A1B]">
-                <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">OFF/CANCEL</div>
-                <div className="font-sans font-black text-base text-stone-600">{totalStats.cancelled}</div>
+                <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">HOLIDAYS</div>
+                <div className="font-sans font-black text-base text-amber-700">{(semesterConfig.holidays || []).length}</div>
               </div>
               <div className="bg-paper border-2 border-ink p-2 text-center shadow-[2px_2px_0px_#1A1A1B]">
                 <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">TOTAL LOGS</div>
@@ -412,7 +630,7 @@ export function AttendanceTrackerView({
       {/* SUB-TAB NAVIGATOR                                             */}
       {/* ------------------------------------------------------------- */}
       <div className="flex items-center justify-between border-b-2 border-ink gap-2 flex-wrap pt-2">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           <button
             type="button"
             onClick={() => setActiveSubTab('overview')}
@@ -437,7 +655,21 @@ export function AttendanceTrackerView({
             )}
           >
             <CalendarDays size={12} strokeWidth={2.5} />
-            <span>DAY-BY-DAY SCHEDULE &amp; STATUS</span>
+            <span>DAY-BY-DAY SCHEDULE</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('holidays')}
+            className={cn(
+              "px-3.5 py-1.5 font-mono text-[9.5px] uppercase font-black border-2 border-b-0 border-ink transition-all cursor-pointer flex items-center gap-1",
+              activeSubTab === 'holidays'
+                ? "bg-amber-400 text-ink shadow-[2px_-2px_0px_#1A1A1B] translate-y-[2px]"
+                : "bg-paper-dark/60 text-ink/60 hover:text-ink"
+            )}
+          >
+            <Palmtree size={12} className="text-amber-900" />
+            <span>HOLIDAYS &amp; OFF-DAYS ({(semesterConfig.holidays || []).length})</span>
           </button>
 
           <button
@@ -613,7 +845,7 @@ export function AttendanceTrackerView({
               </button>
 
               <div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <CalendarDays size={14} className="text-subway-red" />
                   <span className="font-sans font-black text-sm uppercase tracking-tight text-ink">
                     {formattedSelectedDate}
@@ -623,9 +855,21 @@ export function AttendanceTrackerView({
                       TODAY
                     </span>
                   )}
+                  {isSelectedDateHoliday && (
+                    <span className="px-1.5 py-0.2 bg-amber-500 text-ink font-mono text-[7.5px] font-black uppercase border border-amber-950 rounded-3xs flex items-center gap-0.5">
+                      <Palmtree size={10} />
+                      <span>HOLIDAY</span>
+                    </span>
+                  )}
                 </div>
                 <div className="font-mono text-[8px] font-bold text-ink/60 uppercase">
-                  SCHEDULED CLASSES: {classesForSelectedDate.length} SLOTS REGISTERED
+                  {isSelectedDateHoliday ? (
+                    <span className="text-amber-800 font-black">
+                      OFFICIAL HOLIDAY (CLASSES EXEMPTED FROM ATTENDANCE)
+                    </span>
+                  ) : (
+                    <span>SCHEDULED CLASSES: {classesForSelectedDate.length} SLOTS REGISTERED</span>
+                  )}
                 </div>
               </div>
 
@@ -639,7 +883,7 @@ export function AttendanceTrackerView({
               </button>
             </div>
 
-            {/* Quick Pick Date */}
+            {/* Quick Pick Date and Holiday Toggle */}
             <div className="flex items-center gap-2 flex-wrap">
               <input
                 type="date"
@@ -658,8 +902,51 @@ export function AttendanceTrackerView({
               >
                 TODAY
               </button>
+
+              {/* Toggle Holiday for This Date Button */}
+              <button
+                type="button"
+                onClick={handleToggleCurrentDayHoliday}
+                className={cn(
+                  "px-2.5 py-1 font-mono text-[8.5px] font-black uppercase border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center gap-1 cursor-pointer",
+                  isSelectedDateHoliday 
+                    ? "bg-rose-100 text-subway-red border-subway-red hover:bg-rose-200" 
+                    : "bg-amber-300 text-ink hover:bg-amber-400"
+                )}
+                title={isSelectedDateHoliday ? "Unmark holiday for this date" : "Mark this day as a holiday"}
+              >
+                <Palmtree size={12} className={isSelectedDateHoliday ? "text-subway-red" : "text-amber-900"} />
+                <span>{isSelectedDateHoliday ? 'REMOVE HOLIDAY' : 'MARK AS HOLIDAY'}</span>
+              </button>
             </div>
           </div>
+
+          {/* VIBRANT HOLIDAY BANNER IF SELECTED DATE IS HOLIDAY */}
+          {isSelectedDateHoliday && (
+            <div className="bg-amber-100 border-[2.5px] border-amber-700 p-3 shadow-[3px_3px_0px_#1A1A1B] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 animate-in fade-in-50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-500 text-ink border-2 border-amber-900 rounded-xs shadow-[1.5px_1.5px_0px_#1A1A1B]">
+                  <Palmtree size={18} />
+                </div>
+                <div>
+                  <h4 className="font-sans font-black text-xs uppercase text-amber-950">
+                    OFFICIAL ACADEMIC HOLIDAY / OFF-DAY
+                  </h4>
+                  <p className="font-mono text-[8.5px] text-amber-900 font-bold uppercase">
+                    {selectedDateHolidayLabel ? `"${selectedDateHolidayLabel}" • ` : ''}All classes on this day are exempt and will NOT count towards conducted or missed classes.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleCurrentDayHoliday}
+                className="px-2.5 py-1 bg-paper hover:bg-white text-subway-red border-2 border-ink font-mono text-[8px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B] active:translate-y-0.5 cursor-pointer self-end sm:self-auto"
+              >
+                UNMARK HOLIDAY
+              </button>
+            </div>
+          )}
 
           {/* Classes Scheduled for Selected Date */}
           {classesForSelectedDate.length === 0 ? (
@@ -674,11 +961,14 @@ export function AttendanceTrackerView({
             </div>
           ) : (
             <div className="space-y-2.5">
-              {classesForSelectedDate.map(({ entry, status }) => {
+              {classesForSelectedDate.map(({ entry, status, isHoliday }) => {
                 return (
                   <div
                     key={entry.id}
-                    className="bg-paper border-2 border-ink p-3 shadow-[3px_3px_0px_#1A1A1B] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-colors"
+                    className={cn(
+                      "bg-paper border-2 border-ink p-3 shadow-[3px_3px_0px_#1A1A1B] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-colors",
+                      isHoliday && "bg-amber-50/60 border-dashed"
+                    )}
                     style={{ borderLeftColor: entry.color, borderLeftWidth: '6px' }}
                   >
                     {/* Left: Class Time & Info */}
@@ -698,6 +988,11 @@ export function AttendanceTrackerView({
                         >
                           {entry.component || entry.type || 'Lecture'}
                         </span>
+                        {isHoliday && (
+                          <span className="font-mono text-[7.5px] font-black uppercase bg-amber-400 text-ink px-1.5 py-0.2 rounded-3xs border border-amber-800">
+                            EXEMPT (HOLIDAY)
+                          </span>
+                        )}
                       </div>
 
                       <h4 className="font-sans font-black text-sm uppercase text-ink">
@@ -715,27 +1010,29 @@ export function AttendanceTrackerView({
                       </div>
                     </div>
 
-                    {/* Right: Read-Only Synced Status Badge */}
+                    {/* Right: Status Badge */}
                     <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-                      {status === 'present' && (
+                      {isHoliday ? (
+                        <div className="flex items-center gap-1.5 bg-amber-200 border-2 border-amber-800 text-amber-950 px-3 py-1.5 rounded-3xs font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
+                          <AttendanceStatusSymbol status="holiday" size="sm" />
+                          <span>HOLIDAY (NO CLASS)</span>
+                        </div>
+                      ) : status === 'present' ? (
                         <div className="flex items-center gap-1.5 bg-emerald-100 border-2 border-emerald-700 text-emerald-950 px-3 py-1.5 rounded-3xs font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
                           <AttendanceStatusSymbol status="present" size="sm" />
                           <span>PRESENT</span>
                         </div>
-                      )}
-                      {status === 'absent' && (
+                      ) : status === 'absent' ? (
                         <div className="flex items-center gap-1.5 bg-rose-100 border-2 border-rose-700 text-subway-red px-3 py-1.5 rounded-3xs font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
                           <AttendanceStatusSymbol status="absent" size="sm" />
                           <span>ABSENT</span>
                         </div>
-                      )}
-                      {status === 'cancelled' && (
+                      ) : status === 'cancelled' ? (
                         <div className="flex items-center gap-1.5 bg-stone-200 border-2 border-stone-600 text-stone-800 px-3 py-1.5 rounded-3xs font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
                           <AttendanceStatusSymbol status="cancelled" size="sm" />
                           <span>CANCELLED</span>
                         </div>
-                      )}
-                      {status === 'unmarked' && (
+                      ) : (
                         <div className="flex items-center gap-1.5 bg-amber-50 border-2 border-amber-600 text-amber-950 px-3 py-1.5 rounded-3xs font-mono text-[9px] font-black uppercase shadow-[1.5px_1.5px_0px_#1A1A1B]">
                           <AttendanceStatusSymbol status="unmarked" size="sm" />
                           <span>NOT LOGGED</span>
@@ -748,10 +1045,10 @@ export function AttendanceTrackerView({
             </div>
           )}
 
-          <div className="p-3 bg-paper-dark border border-ink/20 rounded-xs flex items-center justify-between gap-2 text-ink/70 font-mono text-[8.5px] uppercase font-bold">
+          <div className="p-3 bg-paper-dark border border-ink/20 rounded-xs flex items-center justify-between gap-2 text-ink/70 font-mono text-[8.5px] uppercase font-bold flex-wrap">
             <span className="flex items-center gap-1">
               <Info size={12} className="text-subway-red" />
-              <span>To mark or change attendance for these classes, open the <strong>Weekly Calendar</strong>.</span>
+              <span>To log class-specific attendance, click any slot in the <strong>Weekly Calendar</strong>. To exempt an entire day, click <strong>Mark as Holiday</strong>.</span>
             </span>
           </div>
 
@@ -759,7 +1056,291 @@ export function AttendanceTrackerView({
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* TAB 3: ATTENDANCE HISTORY LOGS (READ-ONLY)                    */}
+      {/* TAB 3: ACADEMIC HOLIDAYS & OFF-DAYS MANAGER                   */}
+      {/* ------------------------------------------------------------- */}
+      {activeSubTab === 'holidays' && (
+        <div className="bg-paper border-[3px] border-ink p-4 shadow-[5px_5px_0px_#1A1A1B] space-y-4">
+          
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b-2 border-ink pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1 bg-amber-400 text-ink rounded-3xs border border-ink shadow-[1px_1px_0px_#1A1A1B]">
+                  <Palmtree size={16} />
+                </span>
+                <h3 className="font-sans font-black text-sm uppercase tracking-tight text-ink">
+                  ACADEMIC HOLIDAY &amp; VACATION MANAGER
+                </h3>
+              </div>
+              <p className="font-mono text-[8.5px] font-bold text-ink/70 uppercase mt-0.5">
+                Mark single days or multi-day vacation periods. Scheduled classes on these dates are exempt from attendance counts.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="px-2.5 py-1 bg-amber-100 border-2 border-amber-800 text-amber-950 font-mono text-[9px] font-black uppercase rounded-3xs">
+                {(semesterConfig.holidays || []).length} TOTAL OFF-DAYS
+              </div>
+
+              {(semesterConfig.holidays || []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearAllHolidays}
+                  className="px-2 py-1 bg-paper hover:bg-rose-100 text-subway-red border-2 border-ink font-mono text-[8.5px] font-black uppercase transition-colors cursor-pointer"
+                  title="Clear all marked holidays"
+                >
+                  CLEAR ALL
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Form Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* OPTION A: Mark 1 Single Day as Holiday */}
+            <form 
+              onSubmit={handleAddSingleHoliday}
+              className="bg-paper-dark border-2 border-ink p-3.5 shadow-[3px_3px_0px_#1A1A1B] flex flex-col justify-between space-y-3"
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between border-b border-ink/20 pb-1.5">
+                  <h4 className="font-sans font-black text-xs uppercase text-ink flex items-center gap-1.5">
+                    <Calendar size={13} className="text-subway-red" />
+                    <span>MARK 1 SINGLE DAY AS HOLIDAY</span>
+                  </h4>
+                  <span className="font-mono text-[7.5px] font-black uppercase bg-ink text-paper px-1 py-0.2 rounded-3xs">
+                    SINGLE DAY
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-mono text-[8px] font-black uppercase text-ink/70">
+                    SELECT DATE:
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={singleHolidayDate}
+                    onChange={e => setSingleHolidayDate(e.target.value)}
+                    className="w-full bg-white border-2 border-ink px-2.5 py-1.5 font-mono text-xs font-bold uppercase focus:outline-none"
+                  />
+                  <div className="flex gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setSingleHolidayDate(todayStr)}
+                      className="px-1.5 py-0.5 bg-paper border border-ink/40 font-mono text-[7.5px] uppercase font-bold hover:bg-taxi cursor-pointer"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSingleHolidayDate(format(addDays(toIST(new Date()), 1), 'yyyy-MM-dd'))}
+                      className="px-1.5 py-0.5 bg-paper border border-ink/40 font-mono text-[7.5px] uppercase font-bold hover:bg-taxi cursor-pointer"
+                    >
+                      Tomorrow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSingleHolidayDate(selectedDate)}
+                      className="px-1.5 py-0.5 bg-paper border border-ink/40 font-mono text-[7.5px] uppercase font-bold hover:bg-taxi cursor-pointer"
+                    >
+                      Viewing Day ({selectedDate})
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-mono text-[8px] font-black uppercase text-ink/70">
+                    REASON / HOLIDAY NAME (OPTIONAL):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Independence Day, College Sports Day, Tech Fest"
+                    value={singleHolidayName}
+                    onChange={e => setSingleHolidayName(e.target.value)}
+                    className="w-full bg-white border-2 border-ink px-2.5 py-1.5 font-mono text-xs font-bold uppercase focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2 bg-taxi hover:bg-white text-ink border-2 border-ink font-mono text-[9.5px] uppercase font-black shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+              >
+                <Plus size={13} strokeWidth={3} />
+                <span>MARK SINGLE DAY AS HOLIDAY</span>
+              </button>
+            </form>
+
+            {/* OPTION B: Mark Multiple Days / Range as Holiday */}
+            <form 
+              onSubmit={handleAddHolidayRange}
+              className="bg-paper-dark border-2 border-ink p-3.5 shadow-[3px_3px_0px_#1A1A1B] flex flex-col justify-between space-y-3"
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between border-b border-ink/20 pb-1.5">
+                  <h4 className="font-sans font-black text-xs uppercase text-ink flex items-center gap-1.5">
+                    <CalendarRange size={13} className="text-amber-800" />
+                    <span>MARK MULTIPLE DAYS / VACATION RANGE</span>
+                  </h4>
+                  <span className="font-mono text-[7.5px] font-black uppercase bg-amber-500 text-ink px-1 py-0.2 rounded-3xs">
+                    MULTI-DAY
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="block font-mono text-[8px] font-black uppercase text-ink/70">
+                      FROM (START DATE):
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={rangeStartDate}
+                      onChange={e => setRangeStartDate(e.target.value)}
+                      className="w-full bg-white border-2 border-ink px-2 py-1.5 font-mono text-xs font-bold uppercase focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block font-mono text-[8px] font-black uppercase text-ink/70">
+                      TO (END DATE):
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={rangeEndDate}
+                      onChange={e => setRangeEndDate(e.target.value)}
+                      className="w-full bg-white border-2 border-ink px-2 py-1.5 font-mono text-xs font-bold uppercase focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block font-mono text-[8px] font-black uppercase text-ink/70">
+                    VACATION / BREAK NAME:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Diwali Break, Mid-Term Vacation, Winter Recess"
+                    value={rangeHolidayName}
+                    onChange={e => setRangeHolidayName(e.target.value)}
+                    className="w-full bg-white border-2 border-ink px-2.5 py-1.5 font-mono text-xs font-bold uppercase focus:outline-none"
+                  />
+                </div>
+
+                {rangeCountPreview > 0 && (
+                  <div className="p-1.5 bg-amber-100/70 border border-amber-700/40 rounded-3xs font-mono text-[8px] font-bold text-amber-950 uppercase flex items-center gap-1">
+                    <CheckCircle2 size={11} className="text-amber-800 shrink-0" />
+                    <span>Will mark {rangeCountPreview} consecutive days as holidays ({rangeStartDate} → {rangeEndDate})</span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2 bg-amber-400 hover:bg-white text-ink border-2 border-ink font-mono text-[9.5px] uppercase font-black shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+              >
+                <Palmtree size={13} />
+                <span>MARK {rangeCountPreview > 0 ? `${rangeCountPreview} DAYS` : 'RANGE'} AS HOLIDAYS</span>
+              </button>
+            </form>
+
+          </div>
+
+          {/* ACTIVE HOLIDAYS DIRECTORY TABLE / LIST */}
+          <div className="space-y-2 pt-2 border-t-2 border-ink">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <h4 className="font-sans font-black text-xs uppercase tracking-tight text-ink flex items-center gap-1.5">
+                <Palmtree size={13} className="text-amber-800" />
+                <span>CONFIGURED ACADEMIC HOLIDAYS ({activeHolidaysList.length})</span>
+              </h4>
+
+              <div className="relative w-full sm:w-64">
+                <input
+                  type="text"
+                  placeholder="SEARCH HOLIDAY BY DATE OR NAME..."
+                  value={holidaySearchQuery}
+                  onChange={e => setHolidaySearchQuery(e.target.value)}
+                  className="w-full bg-paper border-2 border-ink pl-7 pr-2 py-1 font-mono text-[9px] uppercase font-bold focus:outline-none focus:bg-white"
+                />
+                <Search size={11} className="absolute left-2 top-2 text-ink/50" />
+                {holidaySearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setHolidaySearchQuery('')}
+                    className="absolute right-1.5 top-1.5 text-ink/50 hover:text-ink cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {activeHolidaysList.length === 0 ? (
+              <div className="p-8 text-center bg-paper-dark border-2 border-dashed border-ink/30 space-y-1.5">
+                <Palmtree size={28} className="mx-auto text-ink/30" />
+                <div className="font-sans font-black text-sm uppercase text-ink/70">
+                  NO HOLIDAYS CONFIGURED YET
+                </div>
+                <p className="font-mono text-[8.5px] font-bold text-ink/50 uppercase max-w-md mx-auto">
+                  Add single dates or holiday ranges above. Any classes occurring on marked holidays will be automatically excluded from your attendance metrics.
+                </p>
+              </div>
+            ) : (
+              <div className="max-h-[320px] overflow-y-auto space-y-1.5 pr-1">
+                {activeHolidaysList.map(h => (
+                  <div
+                    key={h.dateStr}
+                    className="bg-paper-dark border border-ink/30 p-2.5 flex justify-between items-center gap-2 text-xs hover:border-ink transition-colors"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[8.5px] font-black uppercase bg-ink text-paper px-1.5 py-0.2 rounded-3xs">
+                        {h.dateStr}
+                      </span>
+
+                      <span className="font-sans font-black text-xs uppercase text-ink">
+                        {h.formatted} ({h.dayName})
+                      </span>
+
+                      {h.label && (
+                        <span className="font-mono text-[8px] font-black uppercase bg-amber-200 text-amber-950 border border-amber-700 px-1.5 py-0.2 rounded-3xs">
+                          {h.label}
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDate(h.dateStr);
+                          setActiveSubTab('daily');
+                        }}
+                        className="font-mono text-[7.5px] font-bold text-ink/50 hover:text-ink uppercase underline cursor-pointer"
+                      >
+                        Inspect Day Schedule
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveHoliday(h.dateStr)}
+                      className="p-1 text-ink/60 hover:text-subway-red hover:bg-rose-50 border border-ink/20 rounded-3xs transition-colors cursor-pointer"
+                      title={`Remove holiday for ${h.dateStr}`}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* TAB 4: ATTENDANCE HISTORY LOGS (READ-ONLY)                    */}
       {/* ------------------------------------------------------------- */}
       {activeSubTab === 'history' && (
         <div className="bg-paper border-[3px] border-ink p-4 shadow-[5px_5px_0px_#1A1A1B] space-y-3">

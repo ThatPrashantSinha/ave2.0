@@ -1059,6 +1059,9 @@ export function WeeklyCalendar({
                 <div className="flex-1 grid grid-cols-7">
                   {weekDays.map((day, dayIndex) => {
                     const today = isSameDay(day, toIST(new Date()));
+                    const dayStr = format(day, 'yyyy-MM-dd');
+                    const isHoliday = (semesterConfig?.holidays || []).includes(dayStr);
+                    const holidayLabel = semesterConfig?.holidayLabels?.[dayStr] || 'Holiday';
                     const dayBirthdays = (birthdays || []).filter(bday => {
                       if (!bday.date) return false;
                       const parts = bday.date.split('-');
@@ -1081,18 +1084,27 @@ export function WeeklyCalendar({
                           isMinimizedView 
                             ? "p-0.5 border-r border-ink/20 min-h-[32px] cursor-default" 
                             : "border-r-[4px] border-ink p-1 md:p-3 min-h-[55px] cursor-pointer hover:bg-paper-dark transition-colors",
-                          today ? "bg-taxi text-ink hover:bg-taxi-hover" : "bg-transparent",
+                          today ? "bg-taxi text-ink hover:bg-taxi-hover" : isHoliday ? "bg-amber-500/10 text-ink" : "bg-transparent",
                           dayIndex === 6 ? "border-r-0" : ""
                         )}
-                        title={isMinimizedView ? undefined : "Click header to schedule dispatch on this date"}
+                        title={isMinimizedView ? (isHoliday ? `🏖️ ${holidayLabel}` : undefined) : `Click header to schedule dispatch on this date${isHoliday ? ` (🏖️ ${holidayLabel})` : ''}`}
                       >
                         <span className={cn("font-mono font-bold uppercase tracking-widest leading-none", isMinimizedView ? "text-[6px]" : "text-[8px] md:text-[10px]")}>{format(day, 'EEE')}</span>
                         <div className="flex items-center gap-0.5 mt-0.5">
                           <span className={cn("font-sans font-black mt-1 leading-none", isMinimizedView ? "text-[11px]" : "text-lg md:text-3xl")}>{format(day, 'd')}</span>
+                          {isMinimizedView && isHoliday && (
+                            <span className="text-[7px]" title={`🏖️ ${holidayLabel}`}>🏖️</span>
+                          )}
                           {isMinimizedView && dayBirthdays.length > 0 && (
                             <span className="text-[7.5px]" title={`${dayBirthdays.length} birthday(s)`}>🎂</span>
                           )}
                         </div>
+                        {!isMinimizedView && isHoliday && (
+                          <div className="mt-1 px-1.5 py-0.5 rounded border border-amber-600/60 bg-amber-100 text-amber-900 font-mono text-[6.5px] md:text-[8px] font-black uppercase tracking-tight flex items-center gap-0.5 max-w-full truncate shadow-[0.5px_0.5px_0px_rgba(0,0,0,0.15)] leading-none" title={`🏖️ Holiday: ${holidayLabel} (Classes suspended / not counted in attendance)`}>
+                            <span>🏖️</span>
+                            <span className="truncate">{holidayLabel}</span>
+                          </div>
+                        )}
                         {!isMinimizedView && dayBirthdays.length > 0 && (
                           <div className="mt-1 flex flex-col gap-1 w-full items-center px-1">
                             {dayBirthdays.map(b => (

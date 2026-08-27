@@ -22,6 +22,7 @@ export const DEFAULT_SEMESTER_CONFIG: SemesterConfig = {
 /**
  * Calculates complete attendance statistics for each subject and total till date.
  * Strictly synchronized from actual calendar attendance records.
+ * Days marked as holidays in semesterConfig.holidays are excluded from class calculations.
  */
 export function calculateAttendanceStats(
   entries: TimeTableEntry[],
@@ -35,6 +36,7 @@ export function calculateAttendanceStats(
 } {
   const minPercent = semesterConfig.minAttendancePercent || DEFAULT_MIN_ATTENDANCE;
   const minRatio = minPercent / 100;
+  const holidaysSet = new Set(semesterConfig.holidays || []);
 
   // Collect all unique subjects from timetable entries and records
   const subjectsMap = new Map<string, {
@@ -87,8 +89,8 @@ export function calculateAttendanceStats(
   let totalAbsent = 0;
   let totalCancelled = 0;
 
-  // All attendance records recorded from the calendar
-  const validRecords = records || [];
+  // All attendance records recorded from the calendar, excluding holiday dates so classes on holidays don't count
+  const validRecords = (records || []).filter(r => !holidaysSet.has(r.date));
 
   subjectsMap.forEach((info, subjectKey) => {
     // Match records strictly to this subject by exact subject name, code, or timetable entry ID
@@ -213,23 +215,51 @@ export function calculateAttendanceStats(
     classesNeeded: totalClassesNeeded,
     totalSubjects: subjectStats.length,
     daysCompleted,
-    weeksCompleted
+    weeksCompleted,
+    holidaysCount: (semesterConfig.holidays || []).length
   };
 
   return { subjectStats, totalStats };
 }
 
 /**
+ * Generates an array of date strings (YYYY-MM-DD) inclusive between startDate and endDate.
+ */
+export function getDatesInRange(startDateStr: string, endDateStr: string): string[] {
+  const dates: string[] = [];
+  try {
+    let start = parseISO(startDateStr);
+    let end = parseISO(endDateStr);
+    if (isAfter(start, end)) {
+      const temp = start;
+      start = end;
+      end = temp;
+    }
+    let current = start;
+    while (isBefore(current, end) || format(current, 'yyyy-MM-dd') === format(end, 'yyyy-MM-dd')) {
+      dates.push(format(current, 'yyyy-MM-dd'));
+      current = addDays(current, 1);
+    }
+  } catch (e) {
+    console.error('Failed to get dates in range:', e);
+  }
+  return dates;
+}
+
+/**
  * Returns scheduled classes for a specific date according to the timetable.
+ * Supports holiday awareness so classes on holidays are recognized as exempt.
  */
 export function getClassesForDate(
   dateStr: string,
   entries: TimeTableEntry[],
-  records: AttendanceRecord[]
+  records: AttendanceRecord[],
+  holidays?: string[]
 ): {
   entry: TimeTableEntry;
   record?: AttendanceRecord;
-  status: AttendanceStatus | 'unmarked';
+  status: AttendanceStatus | 'unmarked' | 'holiday';
+  isHoliday?: boolean;
 }[] {
   let dayOfWeek = 0;
   try {
@@ -238,6 +268,8 @@ export function getClassesForDate(
   } catch (e) {
     dayOfWeek = 1;
   }
+
+  const isHoliday = (holidays || []).includes(dateStr);
 
   // Find all timetable entries for this day of week
   const matchingEntries = entries
@@ -255,7 +287,8 @@ export function getClassesForDate(
     return {
       entry,
       record: rec,
-      status: rec ? rec.status : 'unmarked'
+      status: isHoliday ? 'holiday' : (rec ? rec.status : 'unmarked'),
+      isHoliday
     };
   });
 }

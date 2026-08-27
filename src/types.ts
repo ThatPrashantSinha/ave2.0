@@ -71,6 +71,7 @@ export interface SemesterConfig {
   minAttendancePercent: number; // default 75
   name?: string; // e.g. "Autumn Semester 2026"
   holidays?: string[]; // YYYY-MM-DD dates to exclude
+  holidayLabels?: Record<string, string>; // date YYYY-MM-DD -> label/reason (e.g. "Diwali Break")
 }
 
 export interface SubjectAttendanceStats {
@@ -104,6 +105,7 @@ export interface TotalAttendanceStats {
   totalSubjects: number;
   daysCompleted: number;
   weeksCompleted: number;
+  holidaysCount?: number;
 }
 
 export interface TimeTableEntry {
