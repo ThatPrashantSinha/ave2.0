@@ -1050,39 +1050,6 @@ export function TimeTableModal({
         </>
       )}
 
-        {/* BOTTOM FOOTER TOOLBAR */}
-        <div className="bg-paper border-t-[4px] border-ink p-3 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0">
-          <div className="flex items-center gap-3 text-ink/75 font-mono text-[9px] uppercase font-bold flex-wrap">
-            <span className="flex items-center gap-1">
-              <Info size={12} className="text-subway-red" />
-              TIP: Click any subject card to inspect classroom venue, faculty & notes.
-            </span>
-            <span className="hidden md:inline text-ink/30">•</span>
-            <span className="hidden md:inline text-emerald-800 font-black">
-              📊 Excel Timetable Support Active
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={resetToSample}
-              className="px-2.5 py-1 text-ink/60 hover:text-ink hover:bg-stone-100 border border-ink/30 font-mono text-[8.5px] font-black uppercase transition-colors cursor-pointer flex items-center gap-1"
-              title="Reset sample college schedule"
-            >
-              <RotateCcw size={10} />
-              RESET PRESETS
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-1 bg-ink text-paper font-mono text-[9.5px] uppercase font-black hover:bg-taxi hover:text-ink border-2 border-ink transition-colors cursor-pointer"
-            >
-              DONE
-            </button>
-          </div>
-        </div>
-
         {/* ------------------------------------------------------------- */}
         {/* ⭐ EXCEL IMPORT PREVIEW & CONFIRMATION MODAL                   */}
         {/* ------------------------------------------------------------- */}
@@ -1473,8 +1440,11 @@ export function TimeTableModal({
                               style={{ width: `${Math.min(100, Math.max(0, subStat.percentage))}%` }}
                             />
                           </div>
-                          <div className="font-mono text-[7.5px] font-bold text-ink/70 flex justify-between uppercase">
-                            <span>{subStat.present} Present / {subStat.absent} Absent</span>
+                          <div className="font-mono text-[7.5px] font-bold text-ink/70 flex justify-between uppercase flex-wrap gap-1">
+                            <span>
+                              {subStat.present} Present / {subStat.absent} Absent
+                              {subStat.unmarked > 0 ? ` / ${subStat.unmarked} Unmarked` : ''}
+                            </span>
                             {subStat.percentage >= (semesterConfig?.minAttendancePercent || 75) ? (
                               <span className="text-emerald-700 font-black">Can bunk {subStat.safeBunks} more classes</span>
                             ) : (

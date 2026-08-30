@@ -37,7 +37,9 @@ import {
   Building,
   Ban,
   HelpCircle,
-  AlertCircle 
+  AlertCircle,
+  ShieldCheck,
+  ShieldAlert 
 } from 'lucide-react';
 import { AnalogClockPicker } from '../components/AnalogClockPicker';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
@@ -3335,18 +3337,38 @@ export function WeeklyCalendar({
                         </div>
                       </div>
 
-                      {/* Overall Percentage Badge if classes conducted */}
-                      {totalConducted > 0 && (
-                        <div className={cn(
-                          "font-mono text-[9px] font-black px-2 py-0.5 border rounded-3xs shadow-[1px_1px_0px_#1A1A1B] flex items-center gap-1",
-                          percent >= minPct 
-                            ? "bg-emerald-100 text-emerald-950 border-emerald-600" 
-                            : "bg-rose-100 text-subway-red border-subway-red"
-                        )}>
-                          <span>OVERALL: {percent}%</span>
-                          <span className="text-[8px] opacity-75">({totalPresent}/{totalConducted})</span>
-                        </div>
-                      )}
+                      {/* Overall Percentage & Safe/Needed Bunk Status */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {totalConducted > 0 && (
+                          <div className={cn(
+                            "font-mono text-[9px] font-black px-2 py-0.5 border rounded-3xs shadow-[1px_1px_0px_#1A1A1B] flex items-center gap-1",
+                            percent >= minPct 
+                              ? "bg-emerald-100 text-emerald-950 border-emerald-600" 
+                              : "bg-rose-100 text-subway-red border-subway-red"
+                          )}>
+                            <span>OVERALL: {percent}%</span>
+                            <span className="text-[8px] opacity-75">({totalPresent}/{totalConducted})</span>
+                          </div>
+                        )}
+
+                        {subStat && (
+                          subStat.totalConducted === 0 ? (
+                            <span className="px-2 py-0.5 bg-stone-100 text-ink/60 border border-ink/30 rounded-3xs font-mono text-[8.5px] font-bold uppercase shadow-[1px_1px_0px_#1A1A1B]">
+                              NO LOGS YET
+                            </span>
+                          ) : subStat.percentage >= minPct ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-950 border border-emerald-600 rounded-3xs font-mono text-[8.5px] font-black uppercase flex items-center gap-1 shadow-[1px_1px_0px_#1A1A1B]">
+                              <ShieldCheck size={11} className="text-emerald-700 shrink-0" />
+                              <span>SAFE ({subStat.safeBunks} CAN BUNK)</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-rose-100 text-subway-red border border-red-600 rounded-3xs font-mono text-[8.5px] font-black uppercase flex items-center gap-1 shadow-[1px_1px_0px_#1A1A1B]">
+                              <ShieldAlert size={11} className="text-subway-red shrink-0" />
+                              <span>NEED {subStat.classesNeeded} CLASSES</span>
+                            </span>
+                          )
+                        )}
+                      </div>
                     </div>
 
                     {/* Quick Attendance Action Buttons */}

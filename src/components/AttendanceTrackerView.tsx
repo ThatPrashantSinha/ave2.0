@@ -370,23 +370,6 @@ export function AttendanceTrackerView({
         </div>
       </div>
 
-      {/* INFORMATIVE SYNC CALLOUT */}
-      <div className="bg-taxi/20 border-2 border-ink p-2.5 shadow-[2px_2px_0px_#1A1A1B] flex items-center justify-between gap-2.5 flex-wrap">
-        <div className="flex items-center gap-2.5">
-          <Info size={16} className="text-subway-red shrink-0" />
-          <p className="font-mono text-[9px] font-bold text-ink uppercase leading-snug">
-            Attendance is calculated strictly from your <strong>Weekly Calendar</strong>. Days marked as <strong>Holidays</strong> are automatically excluded so classes on those dates do not count against your attendance.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('holidays')}
-          className="text-[8.5px] font-mono font-black uppercase text-amber-950 underline hover:text-ink cursor-pointer shrink-0"
-        >
-          Manage Off-Days &amp; Vacations →
-        </button>
-      </div>
 
       {/* EXPANDABLE SETTINGS PANEL */}
       {isConfigOpen && (
@@ -574,28 +557,6 @@ export function AttendanceTrackerView({
                   </span>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Right Column: Breakdown Chips */}
-          <div className="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end gap-2 w-full lg:w-auto">
-            <div className="grid grid-cols-4 gap-1.5 w-full sm:w-auto">
-              <div className="bg-paper border-2 border-ink p-2 text-center shadow-[2px_2px_0px_#1A1A1B]">
-                <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">PRESENT</div>
-                <div className="font-sans font-black text-base text-emerald-700">{totalStats.present}</div>
-              </div>
-              <div className="bg-paper border-2 border-ink p-2 text-center shadow-[2px_2px_0px_#1A1A1B]">
-                <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">ABSENT</div>
-                <div className="font-sans font-black text-base text-subway-red">{totalStats.absent}</div>
-              </div>
-              <div className="bg-paper border-2 border-ink p-2 text-center shadow-[2px_2px_0px_#1A1A1B]">
-                <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">HOLIDAYS</div>
-                <div className="font-sans font-black text-base text-amber-700">{(semesterConfig.holidays || []).length}</div>
-              </div>
-              <div className="bg-paper border-2 border-ink p-2 text-center shadow-[2px_2px_0px_#1A1A1B]">
-                <div className="font-mono text-[7.5px] uppercase font-bold text-ink/60">TOTAL LOGS</div>
-                <div className="font-sans font-black text-base text-ink">{attendanceRecords.length}</div>
-              </div>
             </div>
           </div>
 
@@ -787,7 +748,7 @@ export function AttendanceTrackerView({
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-1.5 font-mono text-[8px] font-bold uppercase">
+                        <div className="flex items-center gap-1.5 font-mono text-[8px] font-bold uppercase flex-wrap">
                           <span className="text-emerald-700">{stat.present}P</span>
                           <span className="text-ink/30">•</span>
                           <span className="text-subway-red">{stat.absent}A</span>
@@ -795,6 +756,14 @@ export function AttendanceTrackerView({
                             <>
                               <span className="text-ink/30">•</span>
                               <span className="text-stone-500">{stat.cancelled}Off</span>
+                            </>
+                          )}
+                          {stat.unmarked > 0 && (
+                            <>
+                              <span className="text-ink/30">•</span>
+                              <span className="text-amber-700" title={`${stat.unmarked} Unmarked Classes`}>
+                                {stat.unmarked}U
+                              </span>
                             </>
                           )}
                         </div>
@@ -813,9 +782,25 @@ export function AttendanceTrackerView({
                     </div>
 
                     {/* Bottom: Read-only breakdown note */}
-                    <div className="flex items-center justify-between pt-1.5 border-t border-dashed border-ink/20 font-mono text-[8px] uppercase text-ink/60">
+                    <div className="flex items-center justify-between pt-1.5 border-t border-dashed border-ink/20 font-mono text-[8px] uppercase text-ink/60 flex-wrap gap-1">
                       <span>{stat.scheduledWeeklyCount} weekly slots</span>
-                      <span className="font-bold text-ink/80">{stat.present} attended • {stat.absent} missed</span>
+                      <div className="flex items-center gap-1.5 font-bold text-ink/80 flex-wrap">
+                        <span>{stat.present} attended</span>
+                        <span>•</span>
+                        <span>{stat.absent} missed</span>
+                        {stat.cancelled > 0 && (
+                          <>
+                            <span>•</span>
+                            <span className="text-stone-500">{stat.cancelled} off</span>
+                          </>
+                        )}
+                        {stat.unmarked > 0 && (
+                          <>
+                            <span>•</span>
+                            <span className="text-amber-800 font-semibold">{stat.unmarked} unmarked</span>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                   </div>

@@ -88,9 +88,15 @@ export function calculateAttendanceStats(
   let totalPresent = 0;
   let totalAbsent = 0;
   let totalCancelled = 0;
+  let totalUnmarked = 0;
 
   // All attendance records recorded from the calendar, excluding holiday dates so classes on holidays don't count
   const validRecords = (records || []).filter(r => !holidaysSet.has(r.date));
+
+  // Pre-calculate all academic days elapsed in the semester up to targetDate (excluding holidays)
+  const targetDateStr = format(targetDate, 'yyyy-MM-dd');
+  const elapsedSemesterDates = getDatesInRange(semesterConfig.startDate, targetDateStr)
+    .filter(d => !holidaysSet.has(d));
 
   subjectsMap.forEach((info, subjectKey) => {
     // Match records strictly to this subject by exact subject name, code, or timetable entry ID
@@ -113,6 +119,42 @@ export function calculateAttendanceStats(
     const present = uniqueSubjectRecords.filter(r => r.status === 'present').length;
     const absent = uniqueSubjectRecords.filter(r => r.status === 'absent').length;
     const cancelled = uniqueSubjectRecords.filter(r => r.status === 'cancelled').length;
+
+    // Calculate scheduled class instances and unmarked classes till date
+    const subjectEntries = entries.filter(e =>
+      e.subject.trim().toLowerCase() === subjectKey.trim().toLowerCase() ||
+      (e.code && info.code && e.code.trim().toLowerCase() === info.code.trim().toLowerCase())
+    );
+
+    let scheduledOccurrences = 0;
+    let unmarked = 0;
+
+    if (subjectEntries.length > 0 && elapsedSemesterDates.length > 0) {
+      elapsedSemesterDates.forEach(dateStr => {
+        let dayOfWeek = 0;
+        try {
+          dayOfWeek = parseISO(dateStr).getDay();
+        } catch {
+          dayOfWeek = 1;
+        }
+
+        const matchingDayEntries = subjectEntries.filter(e => e.dayOfWeek === dayOfWeek);
+        matchingDayEntries.forEach(entry => {
+          scheduledOccurrences++;
+          // Check if there is an attendance record logged for this date & slot
+          const slotRecord = uniqueSubjectRecords.find(r => 
+            r.date === dateStr && (
+              (r.timeTableEntryId && r.timeTableEntryId === entry.id) ||
+              (!r.timeTableEntryId && r.subject.trim().toLowerCase() === entry.subject.trim().toLowerCase())
+            )
+          );
+
+          if (!slotRecord || (slotRecord.status as string) === 'unmarked') {
+            unmarked++;
+          }
+        });
+      });
+    }
 
     const totalConducted = present + absent;
     let percentage = totalConducted > 0 ? (present / totalConducted) * 100 : 100;
@@ -145,6 +187,7 @@ export function calculateAttendanceStats(
     totalPresent += present;
     totalAbsent += absent;
     totalCancelled += cancelled;
+    totalUnmarked += unmarked;
 
     subjectStats.push({
       subject: info.subject,
@@ -157,7 +200,9 @@ export function calculateAttendanceStats(
       present,
       absent,
       cancelled,
+      unmarked,
       totalConducted,
+      totalScheduled: scheduledOccurrences,
       percentage,
       status,
       safeBunks,
@@ -207,6 +252,7 @@ export function calculateAttendanceStats(
     present: totalPresent,
     absent: totalAbsent,
     cancelled: totalCancelled,
+    unmarked: totalUnmarked,
     totalConducted: overallTotalConducted,
     percentage: overallPercentage,
     minPercent,

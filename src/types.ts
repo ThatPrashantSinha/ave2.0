@@ -85,7 +85,9 @@ export interface SubjectAttendanceStats {
   present: number;
   absent: number;
   cancelled: number;
+  unmarked: number;
   totalConducted: number; // present + absent
+  totalScheduled?: number;
   percentage: number; // (present / totalConducted) * 100
   status: 'safe' | 'warning' | 'danger' | 'untracked';
   safeBunks: number; // How many classes can be missed while staying >= min%
@@ -96,6 +98,7 @@ export interface TotalAttendanceStats {
   present: number;
   absent: number;
   cancelled: number;
+  unmarked: number;
   totalConducted: number;
   percentage: number;
   minPercent: number;
