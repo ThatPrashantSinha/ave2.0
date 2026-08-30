@@ -14,6 +14,7 @@ interface PlannerProps {
   timeTableEntries?: TimeTableEntry[];
   onOpenTimeTable?: () => void;
   semesterConfig?: SemesterConfig;
+  onUpdateSemesterConfig?: (config: Partial<SemesterConfig>) => void;
   attendanceRecords?: AttendanceRecord[];
   onMarkAttendance?: (date: string, subject: string, status: AttendanceStatus, timeTableEntryId?: string, note?: string, code?: string, component?: string) => void;
   onDeleteAttendanceRecord?: (id: string) => void;
@@ -27,10 +28,11 @@ export function Planner({
   deleteTask, 
   updateTask, 
   birthdays, 
-  onOpenBirthdays,
+  onOpenBirthdays, 
   timeTableEntries = [],
   onOpenTimeTable,
   semesterConfig,
+  onUpdateSemesterConfig,
   attendanceRecords = [],
   onMarkAttendance,
   onDeleteAttendanceRecord
@@ -49,6 +51,7 @@ export function Planner({
         timeTableEntries={timeTableEntries}
         onOpenTimeTable={onOpenTimeTable}
         semesterConfig={semesterConfig}
+        onUpdateSemesterConfig={onUpdateSemesterConfig}
         attendanceRecords={attendanceRecords}
         onMarkAttendance={onMarkAttendance}
         onDeleteAttendanceRecord={onDeleteAttendanceRecord}

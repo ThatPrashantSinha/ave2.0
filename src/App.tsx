@@ -81,6 +81,7 @@ export default function App() {
             timeTableEntries={timeTableEntries}
             onOpenTimeTable={() => setIsTimeTableOpen(true)}
             semesterConfig={semesterConfig}
+            onUpdateSemesterConfig={updateSemesterConfig}
             attendanceRecords={attendanceRecords}
             onMarkAttendance={markAttendance}
             onDeleteAttendanceRecord={deleteAttendanceRecord}

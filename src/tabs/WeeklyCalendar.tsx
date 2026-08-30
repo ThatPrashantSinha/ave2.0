@@ -45,6 +45,7 @@ import { SketchPushPin } from '../components/SketchPushPin';
 import { HabitIcon } from '../components/HabitIcon';
 import { AttendanceStatusSymbol } from '../components/AttendanceStatusSymbol';
 import { calculateAttendanceStats } from '../lib/attendanceUtils';
+import { getFestivalsForDate, FestivalHoliday } from '../data/festivalHolidays';
 
 // Helper to format 24hr string to 12hr IST time display (e.g. "09:00 AM", "01:30 PM")
 export function format12Hour(time24: string): string {
@@ -111,6 +112,7 @@ interface WeeklyCalendarProps {
   timeTableEntries?: TimeTableEntry[];
   onOpenTimeTable?: () => void;
   semesterConfig?: SemesterConfig;
+  onUpdateSemesterConfig?: (config: Partial<SemesterConfig>) => void;
   attendanceRecords?: AttendanceRecord[];
   onMarkAttendance?: (date: string, subject: string, status: AttendanceStatus, timeTableEntryId?: string, note?: string, code?: string, component?: string) => void;
   onDeleteAttendanceRecord?: (id: string) => void;
@@ -277,6 +279,7 @@ export function WeeklyCalendar({
   timeTableEntries = [],
   onOpenTimeTable,
   semesterConfig,
+  onUpdateSemesterConfig,
   attendanceRecords = [],
   onMarkAttendance,
   onDeleteAttendanceRecord
@@ -287,6 +290,48 @@ export function WeeklyCalendar({
   const [pickerMonth, setPickerMonth] = useState<Date>(currentDate);
   const [now, setNow] = useState(toIST(new Date()));
   const [isMinimizedView, setIsMinimizedView] = useState(false);
+
+  // Festival & Academic Holiday Details Modal State
+  const [selectedHolidayModal, setSelectedHolidayModal] = useState<{
+    holiday: {
+      id: string;
+      name: string;
+      date: string;
+      type?: string;
+      emoji?: string;
+      description?: string;
+    };
+    isExempt: boolean;
+  } | null>(null);
+
+  const handleToggleHolidayExemption = (dateStr: string, label: string) => {
+    if (!onUpdateSemesterConfig) return;
+    const currentHolidays = semesterConfig?.holidays || [];
+    const currentLabels = { ...(semesterConfig?.holidayLabels || {}) };
+    const isCurrentlyHoliday = currentHolidays.includes(dateStr);
+
+    if (isCurrentlyHoliday) {
+      const newHolidays = currentHolidays.filter(d => d !== dateStr);
+      delete currentLabels[dateStr];
+      onUpdateSemesterConfig({
+        holidays: newHolidays,
+        holidayLabels: currentLabels,
+      });
+      if (selectedHolidayModal) {
+        setSelectedHolidayModal(prev => prev ? { ...prev, isExempt: false } : null);
+      }
+    } else {
+      const newHolidays = [...currentHolidays, dateStr];
+      currentLabels[dateStr] = label;
+      onUpdateSemesterConfig({
+        holidays: newHolidays,
+        holidayLabels: currentLabels,
+      });
+      if (selectedHolidayModal) {
+        setSelectedHolidayModal(prev => prev ? { ...prev, isExempt: true } : null);
+      }
+    }
+  };
 
   // Time Table Visibility & Selection State
   const [isTimeTableVisible, setIsTimeTableVisible] = useState<boolean>(() => {
@@ -1039,7 +1084,8 @@ export function WeeklyCalendar({
               "z-30 sticky top-0 shrink-0 bg-paper",
               isMinimizedView ? "border-b border-ink" : "border-b-[4px] border-ink"
             )}>
-              <div className="flex border-b border-ink/40">
+              {/* Week Days Header Row */}
+              <div className="flex">
                 <div className={cn(
                   "flex flex-col items-center justify-center px-1 shrink-0 bg-paper sticky left-0 z-40 block-decor",
                   isMinimizedView ? "w-10 border-r border-ink py-1" : "w-14 md:w-16 border-r-[4px] border-ink py-1 md:py-2"
@@ -1062,6 +1108,7 @@ export function WeeklyCalendar({
                     const dayStr = format(day, 'yyyy-MM-dd');
                     const isHoliday = (semesterConfig?.holidays || []).includes(dayStr);
                     const holidayLabel = semesterConfig?.holidayLabels?.[dayStr] || 'Holiday';
+                    const dayFestivals = getFestivalsForDate(dayStr);
                     const dayBirthdays = (birthdays || []).filter(bday => {
                       if (!bday.date) return false;
                       const parts = bday.date.split('-');
@@ -1080,56 +1127,133 @@ export function WeeklyCalendar({
                           handleCreateAtSlot(formattedDate, '10:30', '11:30');
                         }}
                         className={cn(
-                          "text-center flex flex-col items-center justify-center relative select-none", 
+                          "text-center flex flex-col items-center justify-start relative select-none", 
                           isMinimizedView 
-                            ? "p-0.5 border-r border-ink/20 min-h-[32px] cursor-default" 
-                            : "border-r-[4px] border-ink p-1 md:p-3 min-h-[55px] cursor-pointer hover:bg-paper-dark transition-colors",
+                            ? "p-0.5 border-r border-ink/20 min-h-[36px] cursor-default" 
+                            : "border-r-[4px] border-ink p-1 md:p-2 min-h-[64px] cursor-pointer hover:bg-paper-dark transition-colors",
                           today ? "bg-taxi text-ink hover:bg-taxi-hover" : isHoliday ? "bg-amber-500/10 text-ink" : "bg-transparent",
                           dayIndex === 6 ? "border-r-0" : ""
                         )}
-                        title={isMinimizedView ? (isHoliday ? `🏖️ ${holidayLabel}` : undefined) : `Click header to schedule dispatch on this date${isHoliday ? ` (🏖️ ${holidayLabel})` : ''}`}
+                        title={isMinimizedView ? (isHoliday ? `🏖️ ${holidayLabel}` : dayFestivals.length > 0 ? `${dayFestivals[0].emoji} ${dayFestivals[0].name}` : undefined) : `Click header to schedule dispatch on this date`}
                       >
                         <span className={cn("font-mono font-bold uppercase tracking-widest leading-none", isMinimizedView ? "text-[6px]" : "text-[8px] md:text-[10px]")}>{format(day, 'EEE')}</span>
-                        <div className="flex items-center gap-0.5 mt-0.5">
-                          <span className={cn("font-sans font-black mt-1 leading-none", isMinimizedView ? "text-[11px]" : "text-lg md:text-3xl")}>{format(day, 'd')}</span>
-                          {isMinimizedView && isHoliday && (
-                            <span className="text-[7px]" title={`🏖️ ${holidayLabel}`}>🏖️</span>
-                          )}
-                          {isMinimizedView && dayBirthdays.length > 0 && (
-                            <span className="text-[7.5px]" title={`${dayBirthdays.length} birthday(s)`}>🎂</span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className={cn("font-sans font-black mt-0.5 leading-none", isMinimizedView ? "text-[11px]" : "text-base md:text-2xl")}>{format(day, 'd')}</span>
+                          {today && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-subway-red animate-pulse shrink-0" title="Today" />
                           )}
                         </div>
-                        {!isMinimizedView && isHoliday && (
-                          <div className="mt-1 px-1.5 py-0.5 rounded border border-amber-600/60 bg-amber-100 text-amber-900 font-mono text-[6.5px] md:text-[8px] font-black uppercase tracking-tight flex items-center gap-0.5 max-w-full truncate shadow-[0.5px_0.5px_0px_rgba(0,0,0,0.15)] leading-none" title={`🏖️ Holiday: ${holidayLabel} (Classes suspended / not counted in attendance)`}>
-                            <span>🏖️</span>
-                            <span className="truncate">{holidayLabel}</span>
-                          </div>
-                        )}
-                        {!isMinimizedView && dayBirthdays.length > 0 && (
-                          <div className="mt-1 flex flex-col gap-1 w-full items-center px-1">
-                            {dayBirthdays.map(b => (
-                              <div 
-                                key={b.id} 
-                                className="bg-ink text-taxi border border-taxi text-[7px] md:text-[9px] font-mono uppercase font-black px-1.5 py-0.5 rounded flex items-center justify-center gap-0.5 select-none text-center max-w-full truncate shadow-[1px_1px_0px_#F7C331] leading-none"
-                                title={`🎂 ${b.name}'s Birthday`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onOpenBirthdays();
-                                }}
-                              >
-                                🎂 {b.name}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {today && <div className={cn("absolute rounded-full bg-subway-red animate-pulse", isMinimizedView ? "top-0.5 right-0.5 w-1 h-1" : "top-1 left-1 w-2 h-2")} title="Current Station" />}
+
+                        {/* Events, Festival Holidays, Academic Holidays & Birthdays rendered below the date */}
+                        <div className="mt-1 flex flex-col gap-1 w-full items-center px-0.5">
+                          {/* Festival Holidays & Special Events */}
+                          {dayFestivals.map(fest => (
+                            <button
+                              key={fest.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedHolidayModal({
+                                  holiday: fest,
+                                  isExempt: isHoliday,
+                                });
+                              }}
+                              className={cn(
+                                "w-full text-left font-mono uppercase font-black transition-all flex items-center justify-between gap-0.5 select-none truncate cursor-pointer",
+                                isMinimizedView
+                                  ? "p-0.5 text-[5.5px] border border-ink shadow-[0.5px_0.5px_0px_#1A1A1B]"
+                                  : "px-1.5 py-0.5 text-[6.5px] md:text-[8px] border-2 border-ink shadow-[1px_1px_0px_#1A1A1B] hover:translate-y-[-0.5px] hover:shadow-[1.5px_1.5px_0px_#1A1A1B]",
+                                fest.type === 'national' 
+                                  ? "bg-emerald-200 text-emerald-950 border-emerald-800" 
+                                  : fest.type === 'gazetted' 
+                                    ? "bg-amber-200 text-amber-950 border-amber-800" 
+                                    : fest.type === 'international' 
+                                      ? "bg-sky-200 text-sky-950 border-sky-800" 
+                                      : fest.type === 'observance'
+                                        ? "bg-stone-200 text-stone-900 border-stone-800"
+                                        : "bg-orange-200 text-orange-950 border-orange-800"
+                              )}
+                              title={`${fest.emoji} ${fest.name} (${fest.type.toUpperCase()}) • Click for holiday details & attendance exemption`}
+                            >
+                              <span className="truncate flex items-center gap-1">
+                                <span>{fest.emoji}</span>
+                                <span className="truncate">{fest.name}</span>
+                              </span>
+                              {isHoliday && !isMinimizedView && (
+                                <span className="shrink-0 bg-ink text-taxi px-0.5 text-[5.5px] font-black rounded-xs" title="Exempt from class attendance">
+                                  OFF
+                                </span>
+                              )}
+                            </button>
+                          ))}
+
+                          {/* Custom Declared Academic Holiday (if not already matched by festival name) */}
+                          {isHoliday && dayFestivals.length === 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedHolidayModal({
+                                  holiday: {
+                                    id: `holiday-${dayStr}`,
+                                    name: holidayLabel,
+                                    date: dayStr,
+                                    type: 'academic',
+                                    emoji: '🏖️',
+                                    description: `Academic holiday / break declared on ${format(day, 'MMMM d, yyyy')}. Classes are exempted from attendance calculation.`,
+                                  },
+                                  isExempt: true,
+                                });
+                              }}
+                              className={cn(
+                                "w-full text-left font-mono uppercase font-black transition-all flex items-center justify-between gap-0.5 select-none truncate cursor-pointer bg-amber-100 text-amber-950 border-2 border-amber-700",
+                                isMinimizedView
+                                  ? "p-0.5 text-[5.5px] border shadow-[0.5px_0.5px_0px_#1A1A1B]"
+                                  : "px-1.5 py-0.5 text-[6.5px] md:text-[8px] shadow-[1px_1px_0px_#1A1A1B] hover:translate-y-[-0.5px]"
+                              )}
+                              title={`🏖️ ${holidayLabel} • Academic Holiday (Classes exempted from attendance)`}
+                            >
+                              <span className="truncate flex items-center gap-1">
+                                <span>🏖️</span>
+                                <span className="truncate">{holidayLabel}</span>
+                              </span>
+                              {!isMinimizedView && (
+                                <span className="shrink-0 bg-amber-800 text-white px-0.5 text-[5.5px] font-black rounded-xs">
+                                  OFF
+                                </span>
+                              )}
+                            </button>
+                          )}
+
+                          {/* Birthdays */}
+                          {dayBirthdays.map(b => (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenBirthdays();
+                              }}
+                              className={cn(
+                                "w-full text-left bg-ink text-taxi border border-taxi font-mono uppercase font-black flex items-center gap-0.5 select-none truncate cursor-pointer shadow-[1px_1px_0px_#F7C331] hover:bg-taxi hover:text-ink transition-colors",
+                                isMinimizedView
+                                  ? "p-0.5 text-[5.5px]"
+                                  : "px-1.5 py-0.5 text-[6.5px] md:text-[8px]"
+                              )}
+                              title={`🎂 ${b.name}'s Birthday • Click to open Birthdays manager`}
+                            >
+                              <span>🎂</span>
+                              <span className="truncate">{b.name}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Multi-day / All-day Tasks spanning multiple days */}
+              {/* Multi-day Spanning Tasks Row (only if multi-day tasks exist) */}
               {multiDayTasksForWeek.length > 0 && (
                 <div className="flex bg-paper-dark border-t border-ink shrink-0 relative">
                   <div className={cn(
@@ -1138,15 +1262,13 @@ export function WeeklyCalendar({
                   )}>
                     <span className="font-mono text-[7px] uppercase font-black text-ink/50 tracking-wider text-center leading-none">SPAN</span>
                   </div>
-                  <div className="flex-1 relative py-1 min-h-[36px] bg-paper/30 flex flex-col justify-center">
-                    {/* Background grid indicators */}
+                  <div className="flex-1 relative py-1 min-h-[32px] bg-paper/30 flex flex-col justify-center">
                     <div className="absolute inset-0 grid grid-cols-7 pointer-events-none">
                       {Array.from({ length: 7 }).map((_, idx) => (
                         <div key={idx} className={cn("h-full", isMinimizedView ? "border-r border-ink/10" : "border-r-[4px] border-ink/10", idx === 6 ? "border-r-0" : "")} />
                       ))}
                     </div>
                     
-                    {/* Spanning task cards */}
                     <div className="flex flex-col gap-1 px-1 relative z-10 w-full">
                       {multiDayTasksForWeek.map(task => {
                         const taskStart = new Date(task.deadline!);
@@ -2536,6 +2658,155 @@ export function WeeklyCalendar({
       )}
 
       {/* Birthdays Manager Modal was removed because it is now rendered globally at the app root level */}
+
+      {/* FESTIVAL & ACADEMIC HOLIDAY DETAILS MODAL */}
+      {selectedHolidayModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 select-none">
+          <div 
+            className="absolute inset-0 bg-ink/75 backdrop-blur-sm" 
+            onClick={() => setSelectedHolidayModal(null)}
+          />
+          
+          <div className="relative w-full max-w-md bg-paper border-[6px] border-ink shadow-[8px_8px_0px_#1A1A1B] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="bg-ink text-paper p-4 flex justify-between items-center border-b-[6px] border-taxi shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">{selectedHolidayModal.holiday.emoji || '🏖️'}</span>
+                <div className="text-left">
+                  <span className="font-mono text-[9px] font-black uppercase text-taxi tracking-widest leading-none block">
+                    {selectedHolidayModal.holiday.type ? `${selectedHolidayModal.holiday.type.toUpperCase()} HOLIDAY` : 'CALENDAR EVENT'}
+                  </span>
+                  <h3 className="font-sans font-black text-xl uppercase tracking-tight leading-none mt-1 truncate max-w-[280px]">
+                    {selectedHolidayModal.holiday.name}
+                  </h3>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setSelectedHolidayModal(null)} 
+                className="text-paper hover:text-taxi transition-colors cursor-pointer"
+                aria-label="Close"
+              >
+                <X size={20} strokeWidth={3} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto max-h-[75vh]">
+              {/* Date banner */}
+              <div className="bg-[#FFFEEF] border-[3px] border-ink p-3 flex items-center justify-between shadow-[2px_2px_0px_#1A1A1B]">
+                <div className="flex flex-col">
+                  <span className="font-mono text-[8.5px] font-black uppercase text-ink/60 tracking-wider">
+                    CALENDAR DATE
+                  </span>
+                  <span className="font-sans font-black text-base md:text-lg text-ink uppercase">
+                    {format(parse(selectedHolidayModal.holiday.date, 'yyyy-MM-dd', new Date()), 'EEEE, MMMM d, yyyy')}
+                  </span>
+                </div>
+                <span className={cn(
+                  "font-mono text-[9px] font-black uppercase px-2 py-1 border-2 border-ink",
+                  selectedHolidayModal.holiday.type === 'national' 
+                    ? "bg-emerald-200 text-emerald-950" 
+                    : selectedHolidayModal.holiday.type === 'gazetted' 
+                      ? "bg-amber-200 text-amber-950" 
+                      : selectedHolidayModal.holiday.type === 'international' 
+                        ? "bg-sky-200 text-sky-950" 
+                        : "bg-orange-200 text-orange-950"
+                )}>
+                  {selectedHolidayModal.holiday.type || 'FESTIVAL'}
+                </span>
+              </div>
+
+              {/* Description */}
+              {selectedHolidayModal.holiday.description && (
+                <div className="bg-[#eeeadf] border-2 border-ink p-3">
+                  <span className="font-mono text-[8.5px] font-black uppercase tracking-widest text-ink/60 block mb-1">
+                    ABOUT THIS OCCASION
+                  </span>
+                  <p className="font-mono text-xs font-bold leading-relaxed text-ink/90">
+                    {selectedHolidayModal.holiday.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Attendance Impact Card */}
+              <div className={cn(
+                "border-[3px] p-3.5 space-y-2 transition-all",
+                selectedHolidayModal.isExempt
+                  ? "bg-emerald-50 border-emerald-700 text-emerald-950 shadow-[2px_2px_0px_#047857]"
+                  : "bg-amber-50 border-amber-700 text-amber-950 shadow-[2px_2px_0px_#B45309]"
+              )}>
+                <div className="flex items-center gap-1.5">
+                  {selectedHolidayModal.isExempt ? (
+                    <CheckCircle2 size={16} className="text-emerald-700 shrink-0" strokeWidth={3} />
+                  ) : (
+                    <AlertCircle size={16} className="text-amber-700 shrink-0" strokeWidth={3} />
+                  )}
+                  <span className="font-mono text-[10px] font-black uppercase tracking-wider">
+                    {selectedHolidayModal.isExempt 
+                      ? 'EXEMPTED FROM ATTENDANCE STATS' 
+                      : 'REGULAR CLASS SCHEDULE (COUNTED)'}
+                  </span>
+                </div>
+                <p className="font-mono text-[10px] font-bold opacity-90 leading-snug">
+                  {selectedHolidayModal.isExempt 
+                    ? 'Classes scheduled on this day are officially excluded from your total required attendance calculation.'
+                    : 'Scheduled classes on this date are currently counted in attendance metrics unless declared as an academic holiday.'}
+                </p>
+              </div>
+
+              {/* Action Toggle Button */}
+              {onUpdateSemesterConfig && (
+                <div className="pt-2 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleToggleHolidayExemption(
+                        selectedHolidayModal.holiday.date, 
+                        selectedHolidayModal.holiday.name
+                      );
+                    }}
+                    className={cn(
+                      "w-full py-3 px-4 font-mono text-xs font-black uppercase border-[3px] border-ink transition-all active:shadow-none active:translate-x-[2px] active:translate-y-[2px] cursor-pointer flex items-center justify-center gap-2",
+                      selectedHolidayModal.isExempt
+                        ? "bg-stone-200 text-stone-900 shadow-[3px_3px_0px_#1A1A1B] hover:bg-subway-red hover:text-white"
+                        : "bg-taxi text-ink shadow-[3px_3px_0px_#1A1A1B] hover:bg-taxi-hover"
+                    )}
+                  >
+                    {selectedHolidayModal.isExempt ? (
+                      <>
+                        <Ban size={14} strokeWidth={3} />
+                        REMOVE ACADEMIC HOLIDAY EXEMPTION
+                      </>
+                    ) : (
+                      <>
+                        <span>🏖️</span>
+                        MARK AS ACADEMIC HOLIDAY (EXEMPT IN ATTENDANCE)
+                      </>
+                    )}
+                  </button>
+                  <p className="font-mono text-[8px] text-ink/60 text-center font-bold">
+                    ⚡ Changes instantly synchronize with the Attendance Tracker & Semester Schedule.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-paper-dark border-t-[3px] border-ink p-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedHolidayModal(null)}
+                className="px-4 py-1.5 bg-ink text-paper font-mono text-[10px] font-black uppercase border-2 border-ink hover:bg-taxi hover:text-ink transition-colors cursor-pointer shadow-[2px_2px_0px_#1A1A1B]"
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* TIME PINS (SECTIONS OF THE DAY) DIALOG MODAL */}
       {pinModal.isOpen && (
