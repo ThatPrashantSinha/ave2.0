@@ -23,6 +23,7 @@ export default function App() {
     semesterConfig,
     attendanceRecords,
     subjectManualAttendance,
+    exams,
     addTask, 
     toggleTaskStatus, 
     deleteTask, 
@@ -45,6 +46,8 @@ export default function App() {
     deleteAttendanceRecord,
     resetAttendanceToSample,
     clearAttendanceRecords,
+    addExams,
+    deleteExam,
     refreshStore 
   } = useStore();
 
@@ -85,6 +88,8 @@ export default function App() {
             attendanceRecords={attendanceRecords}
             onMarkAttendance={markAttendance}
             onDeleteAttendanceRecord={deleteAttendanceRecord}
+            exams={exams}
+            deleteExam={deleteExam}
           />
         )}
         {currentTab === 'focus' && <Focus />}
@@ -127,6 +132,10 @@ export default function App() {
           onDeleteAttendanceRecord={deleteAttendanceRecord}
           onResetAttendanceToSample={resetAttendanceToSample}
           onClearAllAttendance={clearAttendanceRecords}
+          exams={exams}
+          addExams={addExams}
+          deleteExam={deleteExam}
+          onNavigateToCalendar={() => setCurrentTab('planner')}
         />
     </div>
   );

@@ -139,3 +139,21 @@ export interface NotePage {
   updatedAt: string; // date string
 }
 
+export type ExamType = 'Theory' | 'Practical' | 'Viva' | 'Quiz' | 'Other';
+
+export interface ExamEntry {
+  id: string;
+  examName: string; // e.g. "Mid-Term Examinations 2026"
+  subject: string;
+  code?: string;
+  date: string; // YYYY-MM-DD
+  dayOfWeek?: string; // e.g. "Monday"
+  startTime: string; // HH:mm format (e.g. "09:30")
+  endTime: string; // HH:mm format (e.g. "12:30")
+  venue?: string; // e.g. "Hall 304, Turing Wing"
+  type?: ExamType;
+  notes?: string; // e.g. "Morning Shift • 100 Marks"
+  color?: string; // hex color code
+  taskId?: string; // linked calendar task ID if created
+}
+

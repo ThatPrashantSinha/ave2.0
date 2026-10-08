@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { format, addDays, startOfWeek, isSameDay, parse, getHours, getMinutes, addHours } from 'date-fns';
-import { Task, Birthday, Habit, TimeTableEntry, SemesterConfig, AttendanceRecord, AttendanceStatus } from '../types';
+import { Task, Birthday, Habit, TimeTableEntry, SemesterConfig, AttendanceRecord, AttendanceStatus, ExamEntry } from '../types';
 import { cn, toIST } from '../lib/utils';
 import { 
   Clock, 
@@ -39,7 +39,8 @@ import {
   HelpCircle,
   AlertCircle,
   ShieldCheck,
-  ShieldAlert 
+  ShieldAlert,
+  FileText 
 } from 'lucide-react';
 import { AnalogClockPicker } from '../components/AnalogClockPicker';
 import { getOccurrencesForDateRange } from '../lib/recurrence';
@@ -118,6 +119,8 @@ interface WeeklyCalendarProps {
   attendanceRecords?: AttendanceRecord[];
   onMarkAttendance?: (date: string, subject: string, status: AttendanceStatus, timeTableEntryId?: string, note?: string, code?: string, component?: string) => void;
   onDeleteAttendanceRecord?: (id: string) => void;
+  exams?: ExamEntry[];
+  deleteExam?: (id: string) => Promise<void>;
 }
 
 interface EventLayout {
@@ -269,6 +272,397 @@ function formatTaskTimeRange(task: Task): string {
   return startTimeStr;
 }
 
+// Helper to extract or resolve full ExamEntry from a calendar task
+export function resolveExamForTask(task: Task, dayStr: string, exams: ExamEntry[] = []): ExamEntry | null {
+  // 1. Direct match by taskId
+  const byTaskId = exams.find(e => e.taskId === task.id);
+  if (byTaskId) return byTaskId;
+
+  // 2. Check if task is tagged or titled as an exam
+  const isExamTask = 
+    task.tags?.includes('EXAM') || 
+    task.id.startsWith('task-exam-') || 
+    task.title.includes('[EXAM') || 
+    task.title.startsWith('📝 [') ||
+    task.title.includes('• [') ||
+    task.title.toLowerCase().startsWith('exam:');
+
+  if (isExamTask) {
+    // Try matching with an exam on this date
+    const byDateAndSubj = exams.find(e => 
+      e.date === dayStr && (
+        (e.subject && task.title.toLowerCase().includes(e.subject.toLowerCase())) ||
+        (e.code && task.title.toLowerCase().includes(e.code.toLowerCase()))
+      )
+    );
+    if (byDateAndSubj) return byDateAndSubj;
+
+    // Synthesize structured exam details from the task's title and description
+    let subject = task.title;
+    let code: string | undefined = undefined;
+    let examName = 'Examination';
+    let venue: string | undefined = undefined;
+    let notes: string | undefined = undefined;
+
+    // Pattern 1: "Subject • Code • [Exam Series]"
+    if (task.title.includes('•')) {
+      const parts = task.title.split('•').map(p => p.trim());
+      subject = parts[0];
+      for (let i = 1; i < parts.length; i++) {
+        const p = parts[i];
+        if (p.startsWith('[') && p.endsWith(']')) {
+          examName = p.slice(1, -1);
+        } else if (p.length <= 12 && /\d/.test(p)) {
+          code = p;
+        }
+      }
+    } 
+    // Pattern 2: "📝 [Mid-Term 2026] CS-301: Data Structures"
+    else if (task.title.startsWith('📝 [')) {
+      const closingBracket = task.title.indexOf(']');
+      if (closingBracket !== -1) {
+        examName = task.title.substring(3, closingBracket).trim();
+        const remainder = task.title.substring(closingBracket + 1).trim();
+        if (remainder.includes(':')) {
+          const colonIdx = remainder.indexOf(':');
+          code = remainder.substring(0, colonIdx).trim();
+          subject = remainder.substring(colonIdx + 1).trim();
+        } else {
+          subject = remainder;
+        }
+      }
+    } else if (task.title.toLowerCase().startsWith('exam:')) {
+      subject = task.title.replace(/^exam:\s*/i, '').trim();
+    }
+
+    if (task.description) {
+      const venueMatch = task.description.match(/Venue:\s*([^\n]+)/i);
+      if (venueMatch) venue = venueMatch[1].trim();
+      const notesMatch = task.description.match(/Notes:\s*([^\n]+)/i);
+      if (notesMatch) notes = notesMatch[1].trim();
+      const codeMatch = task.description.match(/Course Code:\s*([^\n]+)/i) || task.description.match(/Code:\s*([^\n]+)/i);
+      if (codeMatch && !code) code = codeMatch[1].trim();
+      const seriesMatch = task.description.match(/Exam Series:\s*([^\n]+)/i) || task.description.match(/Exam:\s*([^\n]+)/i);
+      if (seriesMatch) examName = seriesMatch[1].trim();
+    }
+
+    const startTimeStr = task.deadline ? format(new Date(task.deadline), 'HH:mm') : '09:30';
+    const endTimeStr = task.endTime ? format(new Date(task.endTime), 'HH:mm') : '12:30';
+
+    return {
+      id: `synth-${task.id}`,
+      examName,
+      subject: subject || 'Exam Paper',
+      code,
+      date: dayStr,
+      startTime: startTimeStr,
+      endTime: endTimeStr,
+      venue,
+      type: 'Theory',
+      notes,
+      taskId: task.id,
+    };
+  }
+
+  return null;
+}
+
+// Custom Exam Card rendered in the Calendar Day Column Header (Under Date)
+interface CalendarExamHeaderCardProps {
+  key?: React.Key;
+  exam: ExamEntry;
+  onSelect: () => void;
+  isMinimizedView: boolean;
+  dayStr: string;
+}
+
+export function CalendarExamHeaderCard({
+  exam,
+  onSelect,
+  isMinimizedView,
+  dayStr,
+}: CalendarExamHeaderCardProps) {
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const isToday = dayStr === todayStr;
+
+  if (isMinimizedView) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect();
+        }}
+        className="w-full text-left bg-subway-red text-white border border-ink p-0.5 text-[5.5px] font-mono uppercase font-black truncate shadow-[0.5px_0.5px_0px_#1A1A1B] hover:bg-red-700 transition-colors"
+        title={`📝 EXAM: ${exam.subject} (${format12Hour(exam.startTime)})`}
+      >
+        <span className="truncate block font-black">{exam.subject}</span>
+      </button>
+    );
+  }
+
+  return (
+    <div
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+      className={cn(
+        "w-full text-left bg-[#FFF5F5] border-[2px] border-ink p-1.5 shadow-[2px_2px_0px_#1A1A1B] hover:shadow-[3.5px_3.5px_0px_#1A1A1B] hover:translate-y-[-1px] transition-all cursor-pointer select-none group/examcard relative overflow-hidden",
+        isToday && "ring-2 ring-subway-red bg-red-50/95"
+      )}
+      title={`Click to view exam paper details: ${exam.subject}`}
+    >
+      {/* Red top accent strip */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-subway-red" />
+
+      {/* Top badges bar */}
+      <div className="flex items-center justify-between gap-1 mt-0.5 mb-1 leading-none">
+        <div className="flex items-center gap-1 min-w-0">
+          <span className="font-mono text-[7px] md:text-[7.5px] font-black uppercase text-white bg-subway-red px-1 py-0.2 shrink-0 shadow-[0.5px_0.5px_0px_#1A1A1B]">
+            📝 {exam.type || 'EXAM'}
+          </span>
+          {exam.code && (
+            <span className="font-mono text-[7px] md:text-[8px] font-black uppercase text-subway-red border border-subway-red/50 bg-red-100/50 px-1 py-0.2 truncate shrink-0">
+              {exam.code}
+            </span>
+          )}
+        </div>
+        {isToday && (
+          <span className="font-mono text-[6.5px] font-black uppercase text-white bg-ink px-1 py-0.2 animate-pulse shrink-0">
+            TODAY
+          </span>
+        )}
+      </div>
+
+      {/* ⭐ SUBJECT NAME FIRST - PROMINENT, BOLD, DOMINANT */}
+      <div className="font-sans font-black text-[9.5px] md:text-[11.5px] text-ink uppercase tracking-tight leading-tight line-clamp-2">
+        {exam.subject}
+      </div>
+
+      {/* Exam Series Name */}
+      {exam.examName && (
+        <div className="font-mono text-[6.5px] md:text-[7.5px] font-bold text-ink/65 uppercase tracking-wide truncate mt-0.5">
+          {exam.examName}
+        </div>
+      )}
+
+      {/* Time & Venue Footer */}
+      <div className="mt-1 pt-1 border-t border-ink/15 flex items-center justify-between gap-1 text-[7px] md:text-[8px] font-mono text-ink/85 font-semibold">
+        <div className="flex items-center gap-0.5 truncate">
+          <Clock size={8} className="text-subway-blue shrink-0" strokeWidth={2.5} />
+          <span className="truncate font-bold">{format12Hour(exam.startTime)}</span>
+        </div>
+        {exam.venue && (
+          <div className="flex items-center gap-0.5 truncate max-w-[50%]" title={exam.venue}>
+            <MapPin size={8} className="text-subway-red shrink-0" strokeWidth={2.5} />
+            <span className="truncate">{exam.venue}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Custom High-Effort Exam Card rendered on the 24-Hour Calendar Time Grid
+interface CalendarExamGridCardProps {
+  key?: React.Key;
+  exam: ExamEntry;
+  style: React.CSSProperties;
+  cardHeight: number;
+  isMinimizedView: boolean;
+  onSelect: () => void;
+  dayStr: string;
+}
+
+export function CalendarExamGridCard({
+  exam,
+  style,
+  cardHeight,
+  isMinimizedView,
+  onSelect,
+  dayStr,
+}: CalendarExamGridCardProps) {
+  const isVerySmall = cardHeight < 38;
+  const isMediumSmall = cardHeight >= 38 && cardHeight < 68;
+  const isTaller = cardHeight >= 68;
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const isToday = exam.date === todayStr || dayStr === todayStr;
+  const durationStr = getClassDuration(exam.startTime, exam.endTime);
+
+  return (
+    <div
+      onClick={(e) => {
+        if (isMinimizedView) return;
+        e.stopPropagation();
+        onSelect();
+      }}
+      style={style}
+      className={cn(
+        "absolute z-20 overflow-hidden transition-all select-none group/examgrid",
+        isMinimizedView
+          ? "border p-[1px] text-[6px] shadow-none cursor-default leading-none bg-[#FFF5F5] border-subway-red"
+          : cn(
+              "border-[2.5px] border-ink shadow-[2.5px_2.5px_0px_#1A1A1B] cursor-pointer hover:translate-y-[-1px] hover:shadow-[4.5px_4.5px_0px_#1A1A1B] active:translate-y-0 active:shadow-none bg-[#FFF8F8]",
+              isVerySmall ? "p-0.5" : isMediumSmall ? "p-1.5" : "p-2"
+            ),
+        isToday && "ring-2 ring-subway-red bg-red-50/95"
+      )}
+      title={`EXAM: ${exam.subject} (${format12Hour(exam.startTime)} – ${format12Hour(exam.endTime)})${exam.venue ? ` @ ${exam.venue}` : ''}`}
+    >
+      {/* Red accent bar on the left edge */}
+      <div 
+        className={cn(
+          "absolute left-0 top-0 bottom-0 bg-subway-red",
+          isMinimizedView ? "w-0.5" : "w-1.5"
+        )} 
+      />
+
+      {/* Subtle academic background watermark */}
+      <div className="absolute right-1 bottom-0.5 opacity-[0.08] group-hover/examgrid:opacity-20 pointer-events-none transition-opacity">
+        <GraduationCap size={isTaller ? 32 : isMediumSmall ? 22 : 16} className="text-subway-red" />
+      </div>
+
+      {isMinimizedView ? (
+        <div className="flex items-center h-full pl-[4px] pr-0.5 text-[6.5px] font-black text-ink overflow-hidden select-none leading-none">
+          <span className="truncate w-full block">
+            <span className="text-subway-red mr-0.5 font-mono font-bold">EXAM:</span>
+            {exam.subject}
+          </span>
+        </div>
+      ) : isVerySmall ? (
+        /* ULTRA COMPACT VIEW (<38px) - SUBJECT NAME FIRST */
+        <div className="flex flex-col justify-center h-full pl-2 pr-0.5 relative z-10">
+          <div className="flex items-center justify-between gap-1 w-full text-[8px] md:text-[9px] font-black text-ink leading-none">
+            <span className="truncate font-sans uppercase">
+              <span className="text-subway-red font-mono text-[7px] font-black mr-1 bg-red-100 px-0.5 border border-subway-red/40">
+                EXAM
+              </span>
+              {exam.subject}
+            </span>
+            <span className="font-mono text-[6.5px] font-bold text-ink/75 shrink-0">
+              {format12Hour(exam.startTime)}
+            </span>
+          </div>
+        </div>
+      ) : isMediumSmall ? (
+        /* MEDIUM VIEW (38px - 68px) - SUBJECT NAME FIRST */
+        <div className="flex flex-col justify-between h-full pl-2 pr-0.5 relative z-10">
+          <div>
+            {/* Top Tag row: EXAM pill + Code + Time */}
+            <div className="flex items-center justify-between gap-1 leading-none mb-0.5">
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="font-mono text-[6.5px] md:text-[7.5px] font-black uppercase text-white bg-subway-red px-1 py-0.2 tracking-wider shrink-0 shadow-[0.5px_0.5px_0px_#1A1A1B]">
+                  📝 EXAM
+                </span>
+                {exam.code && (
+                  <span className="font-mono text-[7px] md:text-[8px] font-black uppercase text-subway-red border border-subway-red/50 bg-red-100/60 px-0.5 py-0.2 truncate shrink-0">
+                    {exam.code}
+                  </span>
+                )}
+              </div>
+              <span className="font-mono text-[6.5px] md:text-[7.5px] font-bold text-ink/75 shrink-0 flex items-center gap-0.5">
+                <Clock size={7} className="text-subway-blue shrink-0" strokeWidth={2.5} />
+                {format12Hour(exam.startTime)}
+              </span>
+            </div>
+
+            {/* ⭐ SUBJECT NAME FIRST */}
+            <div className="font-sans font-black text-[9.5px] md:text-[11px] text-ink uppercase tracking-tight leading-tight line-clamp-1">
+              {exam.subject}
+            </div>
+          </div>
+
+          {/* Bottom venue / series info */}
+          <div className="flex items-center justify-between gap-1 text-[7px] md:text-[8px] font-mono text-ink/80 font-bold overflow-hidden leading-none pt-0.5">
+            {exam.venue ? (
+              <span className="flex items-center gap-0.5 truncate max-w-[65%]">
+                <MapPin size={7} className="text-subway-red shrink-0" strokeWidth={2.5} />
+                <span className="truncate">{exam.venue}</span>
+              </span>
+            ) : (
+              <span className="truncate text-ink/60">{exam.examName || 'Examination'}</span>
+            )}
+            {exam.type && (
+              <span className="uppercase text-[6.5px] font-black px-1 border border-ink/20 shrink-0 bg-paper-dark">
+                {exam.type}
+              </span>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* TALL VIEW (>=68px) - HIGH EFFORT CARD WITH FULL HIERARCHY */
+        <div className="flex flex-col justify-between h-full pl-2.5 pr-1.5 relative z-10 py-0.5">
+          <div>
+            {/* Header banner */}
+            <div className="flex items-center justify-between gap-1 mb-1">
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="font-mono text-[7px] md:text-[8px] font-black uppercase text-white bg-subway-red px-1.5 py-0.2 tracking-wider shrink-0 shadow-[1px_1px_0px_#1A1A1B]">
+                  📝 EXAM PAPER
+                </span>
+                {exam.code && (
+                  <span className="font-mono text-[7.5px] md:text-[8.5px] font-black uppercase text-subway-red border border-subway-red bg-red-100/70 px-1 py-0.2 shrink-0">
+                    {exam.code}
+                  </span>
+                )}
+                {exam.type && (
+                  <span className="font-mono text-[7px] md:text-[8px] font-bold uppercase text-ink/80 border border-ink/30 px-1 py-0.2 shrink-0 bg-paper">
+                    {exam.type}
+                  </span>
+                )}
+              </div>
+
+              {isToday && (
+                <span className="font-mono text-[7px] font-black uppercase text-white bg-ink px-1.5 py-0.2 animate-pulse shrink-0">
+                  TODAY
+                </span>
+              )}
+            </div>
+
+            {/* ⭐ SUBJECT NAME FIRST - PROMINENT, BOLD, DOMINANT */}
+            <div className="font-sans font-black text-[11px] md:text-[13px] text-ink uppercase tracking-tight leading-snug line-clamp-2">
+              {exam.subject}
+            </div>
+
+            {/* Exam Series Name */}
+            {exam.examName && (
+              <div className="font-mono text-[7.5px] md:text-[8.5px] font-bold text-ink/65 uppercase tracking-wide truncate mt-0.5">
+                {exam.examName}
+              </div>
+            )}
+          </div>
+
+          {/* Bottom metadata cluster */}
+          <div className="space-y-0.5 pt-1 border-t border-ink/15 font-mono text-[7.5px] md:text-[8.5px] text-ink/90 font-bold">
+            <div className="flex items-center gap-1 truncate">
+              <Clock size={8.5} className="text-subway-blue shrink-0" strokeWidth={2.5} />
+              <span className="truncate">
+                {format12Hour(exam.startTime)} – {format12Hour(exam.endTime)} IST
+                {durationStr ? ` (${durationStr})` : ''}
+              </span>
+            </div>
+
+            {exam.venue && (
+              <div className="flex items-center gap-1 truncate" title={exam.venue}>
+                <MapPin size={8.5} className="text-subway-red shrink-0" strokeWidth={2.5} />
+                <span className="truncate">{exam.venue}</span>
+              </div>
+            )}
+
+            {exam.notes && cardHeight >= 110 && (
+              <div className="flex items-center gap-1 text-[7px] text-ink/70 italic truncate">
+                <Info size={8} className="shrink-0" />
+                <span className="truncate">{exam.notes}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function WeeklyCalendar({ 
   tasks, 
   habits = [], 
@@ -284,7 +678,9 @@ export function WeeklyCalendar({
   onUpdateSemesterConfig,
   attendanceRecords = [],
   onMarkAttendance,
-  onDeleteAttendanceRecord
+  onDeleteAttendanceRecord,
+  exams = [],
+  deleteExam
 }: WeeklyCalendarProps) {
   const [currentDate, setCurrentDate] = useState(toIST(new Date()));
   const [activePopoverPinId, setActivePopoverPinId] = useState<string | null>(null);
@@ -292,6 +688,7 @@ export function WeeklyCalendar({
   const [pickerMonth, setPickerMonth] = useState<Date>(currentDate);
   const [now, setNow] = useState(toIST(new Date()));
   const [isMinimizedView, setIsMinimizedView] = useState(false);
+  const [selectedExamModal, setSelectedExamModal] = useState<ExamEntry | null>(null);
 
   // Festival & Academic Holiday Details Modal State
   const [selectedHolidayModal, setSelectedHolidayModal] = useState<{
@@ -1120,6 +1517,8 @@ export function WeeklyCalendar({
                       return bMonth === (day.getMonth() + 1) && bDay === day.getDate();
                     });
 
+                    const dayExams = (exams || []).filter(e => e.date === dayStr);
+
                     return (
                       <div 
                         key={day.toISOString()} 
@@ -1146,7 +1545,7 @@ export function WeeklyCalendar({
                           )}
                         </div>
 
-                        {/* Events, Festival Holidays, Academic Holidays & Birthdays rendered below the date */}
+                        {/* Events, Festival Holidays, Academic Holidays, Birthdays & Exams rendered below the date */}
                         <div className="mt-1 flex flex-col gap-1 w-full items-center px-0.5">
                           {/* Festival Holidays & Special Events */}
                           {dayFestivals.map(fest => (
@@ -1247,6 +1646,17 @@ export function WeeklyCalendar({
                               <span>🎂</span>
                               <span className="truncate">{b.name}</span>
                             </button>
+                          ))}
+
+                          {/* Scheduled Exams - High-Effort Custom Exam Header Cards (Subject Name First) */}
+                          {dayExams.map(exam => (
+                            <CalendarExamHeaderCard
+                              key={exam.id}
+                              exam={exam}
+                              dayStr={dayStr}
+                              isMinimizedView={isMinimizedView}
+                              onSelect={() => setSelectedExamModal(exam)}
+                            />
                           ))}
                         </div>
                       </div>
@@ -1608,6 +2018,7 @@ export function WeeklyCalendar({
                     return true;
                   });
                   const dayLayouts = getEventLayouts(dayTasks, hourTops, hourHeights);
+                  const dayStr = format(day, 'yyyy-MM-dd');
                   
                   return (
                     <div key={day.toISOString()} className={cn(
@@ -1649,6 +2060,23 @@ export function WeeklyCalendar({
                         } : getEventStyle(task);
 
                         const cardHeight = layout ? layout.height : (getEventStyle(task).height || 85);
+
+                        // Check if this task represents an exam paper -> Render high effort custom Exam Card (Subject First)
+                        const linkedExam = resolveExamForTask(task, dayStr, exams);
+                        if (linkedExam) {
+                          return (
+                            <CalendarExamGridCard
+                              key={`exam-task-${task.id}`}
+                              exam={linkedExam}
+                              style={style}
+                              cardHeight={cardHeight}
+                              isMinimizedView={isMinimizedView}
+                              onSelect={() => setSelectedExamModal(linkedExam)}
+                              dayStr={dayStr}
+                            />
+                          );
+                        }
+
                         const isVerySmall = cardHeight < 36;
                         const isMediumSmall = cardHeight >= 36 && cardHeight < 62;
                         const isTaller = cardHeight >= 62;
@@ -1958,6 +2386,51 @@ export function WeeklyCalendar({
                                 </div>
                               )}
                             </div>
+                          );
+                        });
+                      })()}
+
+                      {/* Standalone / Unlinked Scheduled Exams (rendered on grid at their exact time slots) */}
+                      {(() => {
+                        const unlinkedExams = (exams || []).filter(e => 
+                          e.date === dayStr && 
+                          !dayTasks.some(t => t.id === e.taskId || (t.tags?.includes('EXAM') && t.title.toLowerCase().includes(e.subject.toLowerCase())))
+                        );
+
+                        return unlinkedExams.map(exam => {
+                          const [shStr, smStr] = exam.startTime.split(':');
+                          const sh = parseInt(shStr, 10);
+                          const sm = parseInt(smStr || '0', 10);
+                          const [ehStr, emStr] = exam.endTime.split(':');
+                          const eh = parseInt(ehStr, 10);
+                          const em = parseInt(emStr || '0', 10);
+
+                          const baseTop = hourTops[sh] || 0;
+                          const startHourHeight = hourHeights[sh] || 85;
+                          const top = baseTop + (sm / 60) * startHourHeight;
+
+                          const endBaseTop = hourTops[eh] || 0;
+                          const endHourHeight = hourHeights[eh] || 85;
+                          const endTop = endBaseTop + (em / 60) * endHourHeight;
+                          const height = Math.max(30, endTop - top - 3);
+
+                          const gridStyle: React.CSSProperties = {
+                            top: `${top}px`,
+                            height: `${height}px`,
+                            left: '2px',
+                            right: '2px',
+                          };
+
+                          return (
+                            <CalendarExamGridCard
+                              key={`unlinked-grid-exam-${exam.id}-${dayStr}`}
+                              exam={exam}
+                              style={gridStyle}
+                              cardHeight={height}
+                              isMinimizedView={isMinimizedView}
+                              onSelect={() => setSelectedExamModal(exam)}
+                              dayStr={dayStr}
+                            />
                           );
                         });
                       })()}
@@ -3600,6 +4073,136 @@ export function WeeklyCalendar({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* EXAM INSPECTION & DETAILS MODAL */}
+      {selectedExamModal && (
+        <div 
+          className="fixed inset-0 z-[10010] flex items-center justify-center p-3 select-none font-sans"
+          onClick={() => setSelectedExamModal(null)}
+        >
+          <div className="absolute inset-0 bg-ink/75 backdrop-blur-xs" />
+          
+          <div 
+            className="relative w-full max-w-md bg-[#FFFEEF] border-[5px] border-ink shadow-[8px_8px_0px_#1A1A1B] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="bg-subway-red text-white p-3.5 border-b-[4px] border-ink flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                <span className="p-1.5 bg-taxi text-ink rounded-3xs border-2 border-ink shadow-[1px_1px_0px_#1A1A1B] shrink-0">
+                  <GraduationCap size={18} strokeWidth={2.5} />
+                </span>
+                <div className="min-w-0">
+                  <span className="font-mono text-[8px] font-black uppercase tracking-widest text-taxi block truncate">
+                    {selectedExamModal.examName || 'EXAMINATION'} • {selectedExamModal.type || 'THEORY'} PAPER
+                  </span>
+                  <h3 className="font-sans font-black text-base md:text-lg uppercase tracking-tight text-white leading-tight truncate">
+                    {selectedExamModal.subject}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedExamModal(null)}
+                className="text-white hover:text-taxi cursor-pointer transition-colors p-1 border border-white/30 hover:border-taxi"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-4 space-y-3.5 bg-paper">
+              {/* Subject Title & Code */}
+              <div className="bg-[#FCFAF2] border-[3px] border-ink p-3 shadow-[3px_3px_0px_#1A1A1B]">
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <span className="font-mono text-[8.5px] font-black uppercase px-2 py-0.5 bg-taxi text-ink border border-ink">
+                    {selectedExamModal.type || 'THEORY'} EXAM
+                  </span>
+                  {selectedExamModal.code && (
+                    <span className="font-mono text-[9px] font-black text-subway-red border border-subway-red px-1.5 py-0.2 bg-red-50">
+                      {selectedExamModal.code}
+                    </span>
+                  )}
+                </div>
+                <h4 className="font-sans font-black text-lg uppercase tracking-tight text-ink leading-snug">
+                  {selectedExamModal.subject}
+                </h4>
+              </div>
+
+              {/* Date, Time & Venue Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-mono text-xs">
+                <div className="bg-paper-dark border-2 border-ink p-2.5 shadow-[2px_2px_0px_#1A1A1B]">
+                  <span className="text-[8px] font-black uppercase text-ink/60 flex items-center gap-1 mb-1">
+                    <CalendarDays size={11} className="text-subway-red" />
+                    EXAM DATE
+                  </span>
+                  <p className="font-black text-ink text-[11px]">
+                    {format(new Date(selectedExamModal.date + 'T12:00:00'), 'EEEE, MMM d, yyyy')}
+                  </p>
+                </div>
+
+                <div className="bg-paper-dark border-2 border-ink p-2.5 shadow-[2px_2px_0px_#1A1A1B]">
+                  <span className="text-[8px] font-black uppercase text-ink/60 flex items-center gap-1 mb-1">
+                    <Clock size={11} className="text-subway-blue" />
+                    TIME DURATION
+                  </span>
+                  <p className="font-black text-ink text-[11px]">
+                    {format12Hour(selectedExamModal.startTime)} – {format12Hour(selectedExamModal.endTime)} IST
+                  </p>
+                </div>
+
+                <div className="sm:col-span-2 bg-paper-dark border-2 border-ink p-2.5 shadow-[2px_2px_0px_#1A1A1B]">
+                  <span className="text-[8px] font-black uppercase text-ink/60 flex items-center gap-1 mb-1">
+                    <MapPin size={11} className="text-amber-700" />
+                    VENUE / EXAMINATION HALL
+                  </span>
+                  <p className="font-black text-ink text-xs">
+                    {selectedExamModal.venue || 'Main Campus Examination Hall / Center'}
+                  </p>
+                </div>
+
+                {selectedExamModal.notes && (
+                  <div className="sm:col-span-2 bg-paper-dark border-2 border-ink p-2.5 shadow-[2px_2px_0px_#1A1A1B]">
+                    <span className="text-[8px] font-black uppercase text-ink/60 flex items-center gap-1 mb-1">
+                      <Info size={11} className="text-ink/70" />
+                      INSTRUCTIONS / REMARKS
+                    </span>
+                    <p className="font-sans text-xs text-ink/90 whitespace-pre-wrap">
+                      {selectedExamModal.notes}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-3 bg-paper-dark border-t-[3px] border-ink flex items-center justify-between gap-2">
+              {deleteExam && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const idToDelete = selectedExamModal.id;
+                    setSelectedExamModal(null);
+                    await deleteExam(idToDelete);
+                  }}
+                  className="px-3 py-1.5 bg-red-100 text-subway-red hover:bg-subway-red hover:text-white font-mono text-[9px] font-black uppercase border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 size={12} />
+                  <span>DELETE EXAM</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setSelectedExamModal(null)}
+                className="px-4 py-1.5 bg-paper hover:bg-taxi text-ink font-mono text-[9.5px] font-black uppercase border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all ml-auto cursor-pointer"
+              >
+                CLOSE
+              </button>
+            </div>
           </div>
         </div>
       )}

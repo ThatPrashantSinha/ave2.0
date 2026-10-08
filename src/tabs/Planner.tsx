@@ -1,5 +1,5 @@
 import React from 'react';
-import { Task, Birthday, Habit, TimeTableEntry, SemesterConfig, AttendanceRecord, AttendanceStatus } from '../types';
+import { Task, Birthday, Habit, TimeTableEntry, SemesterConfig, AttendanceRecord, AttendanceStatus, ExamEntry } from '../types';
 import { WeeklyCalendar } from './WeeklyCalendar';
 
 interface PlannerProps {
@@ -18,6 +18,8 @@ interface PlannerProps {
   attendanceRecords?: AttendanceRecord[];
   onMarkAttendance?: (date: string, subject: string, status: AttendanceStatus, timeTableEntryId?: string, note?: string, code?: string, component?: string) => void;
   onDeleteAttendanceRecord?: (id: string) => void;
+  exams?: ExamEntry[];
+  deleteExam?: (id: string) => Promise<void>;
 }
 
 export function Planner({ 
@@ -35,7 +37,9 @@ export function Planner({
   onUpdateSemesterConfig,
   attendanceRecords = [],
   onMarkAttendance,
-  onDeleteAttendanceRecord
+  onDeleteAttendanceRecord,
+  exams = [],
+  deleteExam
 }: PlannerProps) {
   return (
     <div className="w-full h-full flex-1 flex flex-col">
@@ -55,6 +59,8 @@ export function Planner({
         attendanceRecords={attendanceRecords}
         onMarkAttendance={onMarkAttendance}
         onDeleteAttendanceRecord={onDeleteAttendanceRecord}
+        exams={exams}
+        deleteExam={deleteExam}
       />
     </div>
   );

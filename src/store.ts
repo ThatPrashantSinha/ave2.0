@@ -8,7 +8,8 @@ import {
   AttendanceRecord, 
   AttendanceStatus, 
   SemesterConfig, 
-  SubjectManualAttendance 
+  SubjectManualAttendance,
+  ExamEntry 
 } from './types';
 import { addDays, subDays, format } from 'date-fns';
 import { toIST } from './lib/utils';
@@ -167,6 +168,7 @@ export function useStore() {
   const [semesterConfig, setSemesterConfig] = useState<SemesterConfig>(DEFAULT_SEMESTER_CONFIG);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [subjectManualAttendance, setSubjectManualAttendance] = useState<Record<string, SubjectManualAttendance>>({});
+  const [exams, setExams] = useState<ExamEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load birthdays, timetable, semester config & attendance on startup
@@ -228,6 +230,15 @@ export function useStore() {
       }
     } catch (e) {
       console.error('Failed to parse manual attendance from localStorage:', e);
+    }
+
+    try {
+      const storedExams = localStorage.getItem('daily_docket_exams');
+      if (storedExams) {
+        setExams(JSON.parse(storedExams));
+      }
+    } catch (e) {
+      console.error('Failed to parse exams from localStorage:', e);
     }
   }, []);
 
@@ -858,6 +869,118 @@ export function useStore() {
     }, 0);
   };
 
+  // Exams functions
+  const addExams = async (newExamList: Omit<ExamEntry, 'id'>[], addToCalendar: boolean = true) => {
+    const createdExams: ExamEntry[] = [];
+    const newTasksToStore: Task[] = [];
+
+    for (const item of newExamList) {
+      const id = 'exam-' + Math.random().toString(36).substring(7);
+      let linkedTaskId: string | undefined = undefined;
+
+      if (addToCalendar) {
+        const taskId = 'task-exam-' + Math.random().toString(36).substring(7);
+        linkedTaskId = taskId;
+        
+        // Parse start and end times to valid local Date objects
+        const startDateTime = new Date(`${item.date}T${item.startTime || '09:30'}:00`);
+        const endDateTime = new Date(`${item.date}T${item.endTime || '12:30'}:00`);
+
+        const examTask: Task = {
+          id: taskId,
+          title: `${item.subject} • ${item.code ? `${item.code} • ` : ''}[${item.examName || 'EXAM'}]`,
+          description: `Subject: ${item.subject}\nExam Series: ${item.examName || 'Exam'}\nCourse Code: ${item.code || 'N/A'}\nTime: ${item.startTime} – ${item.endTime} IST\nVenue: ${item.venue || 'Examination Hall'}${item.notes ? `\nNotes: ${item.notes}` : ''}`,
+          deadline: isNaN(startDateTime.getTime()) ? new Date() : startDateTime,
+          endTime: isNaN(endDateTime.getTime()) ? undefined : endDateTime,
+          status: 'todo',
+          priority: 'urgent',
+          tags: ['EXAM', item.examName || 'Exam', item.code || ''].filter(Boolean),
+          recurring: 'none',
+        };
+
+        newTasksToStore.push(examTask);
+      }
+
+      createdExams.push({
+        ...item,
+        id,
+        taskId: linkedTaskId,
+      });
+    }
+
+    if (newTasksToStore.length > 0) {
+      setTasks(prev => [...prev, ...newTasksToStore]);
+      setTimeout(async () => {
+        for (const t of newTasksToStore) {
+          try {
+            await putTaskInDB(t);
+          } catch (e) {
+            console.error('Failed to put exam task in DB:', e);
+          }
+        }
+      }, 0);
+    }
+
+    setExams(prev => {
+      const updated = [...prev, ...createdExams];
+      localStorage.setItem('daily_docket_exams', JSON.stringify(updated));
+      return updated;
+    });
+
+    return createdExams;
+  };
+
+  const deleteExam = async (id: string) => {
+    const target = exams.find(e => e.id === id);
+    if (target?.taskId) {
+      await deleteTask(target.taskId, 'all');
+    }
+    setExams(prev => {
+      const updated = prev.filter(e => e.id !== id);
+      localStorage.setItem('daily_docket_exams', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const updateExam = async (updated: ExamEntry) => {
+    setExams(prev => {
+      const list = prev.map(e => e.id === updated.id ? updated : e);
+      localStorage.setItem('daily_docket_exams', JSON.stringify(list));
+      return list;
+    });
+
+    if (updated.taskId) {
+      const startDateTime = new Date(`${updated.date}T${updated.startTime || '09:30'}:00`);
+      const endDateTime = new Date(`${updated.date}T${updated.endTime || '12:30'}:00`);
+      await updateTask(updated.taskId, {
+        title: `📝 [${updated.examName || 'EXAM'}] ${updated.code ? `${updated.code}: ` : ''}${updated.subject}`,
+        description: `Exam: ${updated.examName}\nSubject: ${updated.subject} (${updated.code || 'N/A'})\nTime: ${updated.startTime} – ${updated.endTime} IST\nVenue: ${updated.venue || 'Examination Hall'}${updated.notes ? `\nNotes: ${updated.notes}` : ''}`,
+        deadline: isNaN(startDateTime.getTime()) ? new Date() : startDateTime,
+        endTime: isNaN(endDateTime.getTime()) ? undefined : endDateTime,
+      });
+    }
+  };
+
+  const clearExams = async (examNameFilter?: string) => {
+    if (examNameFilter) {
+      const toDelete = exams.filter(e => e.examName === examNameFilter);
+      for (const e of toDelete) {
+        if (e.taskId) await deleteTask(e.taskId, 'all');
+      }
+      setExams(prev => {
+        const remaining = prev.filter(e => e.examName !== examNameFilter);
+        localStorage.setItem('daily_docket_exams', JSON.stringify(remaining));
+        return remaining;
+      });
+    } else {
+      for (const e of exams) {
+        if (e.taskId) await deleteTask(e.taskId, 'all');
+      }
+      setExams([]);
+      localStorage.removeItem('daily_docket_exams');
+    }
+  };
+
   return {
     tasks,
     habits,
@@ -866,6 +989,7 @@ export function useStore() {
     semesterConfig,
     attendanceRecords,
     subjectManualAttendance,
+    exams,
     isLoading,
     addTask,
     toggleTaskStatus,
@@ -889,6 +1013,10 @@ export function useStore() {
     deleteAttendanceRecord,
     clearAttendanceRecords,
     resetAttendanceToSample,
+    addExams,
+    deleteExam,
+    updateExam,
+    clearExams,
     refreshStore: loadData
   };
 }

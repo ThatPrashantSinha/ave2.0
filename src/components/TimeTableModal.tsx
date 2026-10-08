@@ -6,8 +6,10 @@ import {
   SemesterConfig, 
   AttendanceRecord, 
   SubjectManualAttendance, 
-  AttendanceStatus 
+  AttendanceStatus,
+  ExamEntry 
 } from '../types';
+import { ExamImageParserModal } from './ExamImageParserModal';
 import { AttendanceTrackerView } from './AttendanceTrackerView';
 import { AttendanceStatusSymbol } from './AttendanceStatusSymbol';
 import { 
@@ -16,6 +18,7 @@ import {
 } from '../lib/attendanceUtils';
 import { 
   GraduationCap, 
+  Camera,
   X, 
   Plus, 
   Trash2, 
@@ -115,7 +118,11 @@ interface TimeTableModalProps {
   onDeleteAttendanceRecord?: (id: string) => void;
   onResetAttendanceToSample?: () => void;
   onClearAllAttendance?: () => void;
-  initialTab?: 'schedule' | 'attendance';
+  initialTab?: 'schedule' | 'attendance' | 'exams';
+  exams?: ExamEntry[];
+  addExams?: (exams: Omit<ExamEntry, 'id'>[], addToCalendar?: boolean) => Promise<any>;
+  deleteExam?: (id: string) => Promise<void>;
+  onNavigateToCalendar?: () => void;
 }
 
 export function TimeTableModal({
@@ -137,9 +144,15 @@ export function TimeTableModal({
   onDeleteAttendanceRecord,
   onResetAttendanceToSample,
   onClearAllAttendance,
-  initialTab = 'schedule'
+  initialTab = 'schedule',
+  exams = [],
+  addExams,
+  deleteExam,
+  onNavigateToCalendar
 }: TimeTableModalProps) {
-  const [activeMainTab, setActiveMainTab] = useState<'schedule' | 'attendance'>(initialTab);
+  const [activeMainTab, setActiveMainTab] = useState<'schedule' | 'attendance' | 'exams'>(initialTab);
+  const [isExamParserOpen, setIsExamParserOpen] = useState(false);
+  const [selectedExamFilter, setSelectedExamFilter] = useState<string>('all');
   const [selectedEntry, setSelectedEntry] = useState<TimeTableEntry | null>(null);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -584,6 +597,17 @@ export function TimeTableModal({
 
           <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-end">
             
+            {/* ⭐ ADD EXAMS FROM IMAGE BUTTON */}
+            <button
+              type="button"
+              onClick={() => setIsExamParserOpen(true)}
+              className="px-3 py-1.5 bg-taxi text-ink hover:bg-white hover:text-ink font-mono text-[9.5px] uppercase font-black border-2 border-ink shadow-[2.5px_2.5px_0px_#1A1A1B] active:translate-y-0.5 active:shadow-none transition-all flex items-center gap-1.5 cursor-pointer group"
+              title="Scan or upload exam timetable image to parse info and add to calendar"
+            >
+              <Sparkles size={14} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform text-subway-red" />
+              <span>ADD EXAMS FROM IMAGE</span>
+            </button>
+
             {/* ⭐ PRIMARY EXCEL IMPORT BUTTON */}
             <button
               type="button"
@@ -699,6 +723,20 @@ export function TimeTableModal({
                 {totalAttendanceStats.percentage}% TILL DATE
               </span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveMainTab('exams')}
+              className={cn(
+                "px-3 py-1.5 font-mono text-[10px] uppercase font-black border-2 border-ink shadow-[2px_2px_0px_#1A1A1B] active:translate-y-0.5 transition-all flex items-center gap-1.5 cursor-pointer",
+                activeMainTab === 'exams'
+                  ? "bg-subway-red text-white"
+                  : "bg-paper text-ink hover:bg-red-50"
+              )}
+            >
+              <FileText size={13} className={activeMainTab === 'exams' ? 'text-taxi' : 'text-subway-red'} />
+              <span>3. EXAM TIMETABLE ({exams.length})</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 font-mono text-[8.5px] font-bold text-ink/75 uppercase">
@@ -724,6 +762,228 @@ export function TimeTableModal({
               onResetToSample={onResetAttendanceToSample || (() => {})}
               onClearAll={onClearAllAttendance || (() => {})}
             />
+          </div>
+        )}
+
+        {/* RENDER ACTIVE TAB: EXAM TIMETABLE VIEW */}
+        {activeMainTab === 'exams' && (
+          <div className="flex-1 overflow-y-auto p-3 sm:p-5 bg-paper-dark/30 space-y-4">
+            {/* Header banner */}
+            <div className="bg-ink text-paper p-4 border-[3px] border-ink shadow-[4px_4px_0px_#1A1A1B] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1 bg-subway-red text-white rounded-3xs border border-paper shadow-[1px_1px_0px_#FFF]">
+                    <Sparkles size={16} strokeWidth={2.5} />
+                  </span>
+                  <h3 className="font-sans font-black text-lg uppercase tracking-tight text-paper">
+                    COLLEGE EXAM SCHEDULE &amp; PAPERS
+                  </h3>
+                </div>
+                <p className="font-mono text-[9px] uppercase tracking-widest font-bold text-taxi mt-1">
+                  {exams.length} EXAM SESSIONS REGISTERED • SYNCED WITH CALENDAR DOCKET &amp; TIMETABLE
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsExamParserOpen(true)}
+                  className="px-3.5 py-1.5 bg-taxi text-ink hover:bg-white font-mono text-[10px] uppercase font-black border-2 border-paper shadow-[2.5px_2.5px_0px_#FFF] active:translate-y-0.5 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Camera size={13} strokeWidth={2.5} />
+                  <span>ADD EXAMS FROM IMAGE</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter by Exam Series */}
+            {exams.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono text-[9px] font-black uppercase text-ink/75 mr-1">
+                  FILTER SERIES:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedExamFilter('all')}
+                  className={cn(
+                    "px-2.5 py-1 font-mono text-[9px] uppercase font-bold border-2 border-ink shadow-[1.5px_1.5px_0px_#1A1A1B] transition-all cursor-pointer",
+                    selectedExamFilter === 'all'
+                      ? "bg-ink text-paper font-black"
+                      : "bg-paper text-ink hover:bg-stone-100"
+                  )}
+                >
+                  ALL ({exams.length})
+                </button>
+                {Array.from(new Set(exams.map(e => e.examName))).map(name => {
+                  const count = exams.filter(e => e.examName === name).length;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => setSelectedExamFilter(name)}
+                      className={cn(
+                        "px-2.5 py-1 font-mono text-[9px] uppercase font-bold border-2 border-ink shadow-[1.5px_1.5px_0px_#1A1A1B] transition-all cursor-pointer",
+                        selectedExamFilter === name
+                          ? "bg-subway-red text-white font-black"
+                          : "bg-paper text-ink hover:bg-stone-100"
+                      )}
+                    >
+                      {name} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Exam cards list */}
+            {exams.length === 0 ? (
+              <div className="bg-paper border-[4px] border-ink p-8 text-center space-y-4 shadow-[6px_6px_0px_#1A1A1B]">
+                <div className="inline-flex p-3 bg-taxi text-ink rounded-full border-2 border-ink shadow-[3px_3px_0px_#1A1A1B]">
+                  <Sparkles size={32} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h4 className="font-sans font-black text-xl uppercase tracking-tight text-ink">
+                    NO EXAMS ADDED YET
+                  </h4>
+                  <p className="font-mono text-xs uppercase font-bold text-ink/70 mt-1 max-w-md mx-auto">
+                    Upload your university exam date-sheet or timetable image to automatically extract and register exams onto your calendar docket.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsExamParserOpen(true)}
+                    className="px-4 py-2 bg-taxi text-ink font-mono text-xs font-black uppercase border-2 border-ink shadow-[3px_3px_0px_#1A1A1B] hover:bg-white active:translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <Camera size={15} />
+                    <span>ADD EXAMS FROM IMAGE</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {exams
+                  .filter(e => selectedExamFilter === 'all' || e.examName === selectedExamFilter)
+                  .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+                  .map(exam => {
+                    const todayStr = format(new Date(), 'yyyy-MM-dd');
+                    const isToday = exam.date === todayStr;
+                    const isPast = exam.date < todayStr;
+                    
+                    let countdownText = '';
+                    if (isToday) {
+                      countdownText = 'TODAY';
+                    } else if (isPast) {
+                      countdownText = 'COMPLETED';
+                    } else {
+                      const diffDays = Math.ceil((new Date(exam.date).getTime() - new Date(todayStr).getTime()) / (1000 * 60 * 60 * 24));
+                      countdownText = `IN ${diffDays} DAY${diffDays > 1 ? 'S' : ''}`;
+                    }
+
+                    return (
+                      <div
+                        key={exam.id}
+                        className={cn(
+                          "bg-[#FCFAF2] border-[3px] border-ink p-3.5 shadow-[4px_4px_0px_#1A1A1B] flex flex-col justify-between gap-2.5 transition-all",
+                          isToday && "ring-2 ring-subway-red bg-red-50/70"
+                        )}
+                      >
+                        <div>
+                          {/* Top row: Exam series pill + Countdown */}
+                          <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                            <span className="font-mono text-[8px] font-black uppercase px-2 py-0.5 bg-ink text-taxi border border-ink shadow-[1px_1px_0px_#1A1A1B]">
+                              {exam.examName}
+                            </span>
+
+                            <span className={cn(
+                              "font-mono text-[8px] font-black uppercase px-2 py-0.5 border shadow-[1px_1px_0px_#1A1A1B]",
+                              isToday 
+                                ? "bg-subway-red text-white border-ink animate-pulse" 
+                                : isPast 
+                                  ? "bg-stone-200 text-stone-700 border-stone-400"
+                                  : "bg-emerald-100 text-emerald-950 border-emerald-700"
+                            )}>
+                              {countdownText}
+                            </span>
+                          </div>
+
+                          {/* Subject & Code */}
+                          <h4 className="font-sans font-black text-lg uppercase tracking-tight text-ink leading-snug">
+                            {exam.subject}
+                          </h4>
+                          {exam.code && (
+                            <div className="mt-1">
+                              <span className="font-mono text-[9px] font-black uppercase text-subway-red bg-red-50 border border-subway-red px-1.5 py-0.5 shadow-[1px_1px_0px_#EF4444]">
+                                CODE: {exam.code}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Date, Time, Venue metadata */}
+                          <div className="mt-2 space-y-1 font-mono text-[10px] font-bold text-ink/85">
+                            <div className="flex items-center gap-1.5">
+                              <CalendarDays size={13} className="text-subway-red shrink-0" />
+                              <span>{format(new Date(exam.date + 'T12:00:00'), 'EEEE, MMMM d, yyyy')}</span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <Clock size={13} className="text-subway-blue shrink-0" />
+                              <span>{format12Hour(exam.startTime)} – {format12Hour(exam.endTime)} IST</span>
+                              {exam.type && (
+                                <span className="ml-1 px-1.5 py-0.2 bg-paper-dark border border-ink/40 text-[8px] font-black">
+                                  {exam.type.toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+
+                            {exam.venue && (
+                              <div className="flex items-center gap-1.5">
+                                <MapPin size={13} className="text-amber-700 shrink-0" />
+                                <span>{exam.venue}</span>
+                              </div>
+                            )}
+
+                            {exam.notes && (
+                              <div className="flex items-start gap-1.5 text-ink/70 text-[9px] mt-1 italic">
+                                <Info size={11} className="shrink-0 mt-0.5" />
+                                <span>{exam.notes}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Bottom actions */}
+                        <div className="pt-2 border-t border-ink/20 flex items-center justify-between gap-2">
+                          {onNavigateToCalendar && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onNavigateToCalendar();
+                              }}
+                              className="font-mono text-[8.5px] font-black uppercase text-subway-blue hover:text-ink flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>VIEW ON CALENDAR</span>
+                              <ArrowRight size={11} />
+                            </button>
+                          )}
+
+                          {deleteExam && (
+                            <button
+                              type="button"
+                              onClick={() => deleteExam(exam.id)}
+                              className="p-1 text-ink/50 hover:text-subway-red cursor-pointer ml-auto transition-colors"
+                              title="Delete this exam paper"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
         )}
 
@@ -1932,12 +2192,30 @@ export function TimeTableModal({
                     {editingEntryId ? 'SAVE CHANGES' : 'CONFIRM & ADD TO TIMETABLE'}
                   </button>
                 </div>
-
               </form>
-
             </div>
           </div>
         )}
+
+        {/* EXAM IMAGE PARSER MODAL */}
+        <ExamImageParserModal
+          isOpen={isExamParserOpen}
+          onClose={() => setIsExamParserOpen(false)}
+          onAddExams={async (newExams, addToCalendar) => {
+            if (addExams) {
+              await addExams(newExams, addToCalendar);
+              showToast(`Added ${newExams.length} exams for "${newExams[0]?.examName || 'Exam'}" to timetable & calendar!`);
+              setActiveMainTab('exams');
+            }
+          }}
+          defaultExamName={entries[0]?.timeTableCode ? `Exam - ${entries[0].timeTableCode}` : 'Mid-Term Examination 2026'}
+          onNavigateToCalendar={() => {
+            onClose();
+            if (onNavigateToCalendar) {
+              onNavigateToCalendar();
+            }
+          }}
+        />
 
       </div>
     </div>
